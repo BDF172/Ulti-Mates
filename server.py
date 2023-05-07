@@ -27,24 +27,15 @@ path_db='/home/freebox/server/users.db'
 
 """
 ---------TO DO---------
-
-- load and save data from and to a SQL database
-    - user ; id ; pseudo ; table = entites
-
-- python only dict 
-    - {pseudo: IPv4}
-    
--
--
--
--
+    - Ajouter un système pour les programmeurs qui ouvre une fenêtre et exécute le programme qu'ils viennent de recevoir 
+    pour éviter de faire des copiers collers
 
 """
 
 commandes = ["/msg", "/users", "/help"]
 users_ip = {}
 
-def load_user_name(client):
+def load_user_name(username):
     """
     find a user by name
     code 1 = found
@@ -53,10 +44,16 @@ def load_user_name(client):
     temp_db = sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
     print("👉 |checking user name")
-    temp_cur.execute("SELECT COUNT(user) FROM entite WHERE user='"+client.username()+"';")
+    temp_cur.execute(f"SELECT COUNT(user) FROM entite WHERE user='{username}';")
     res = temp_cur.fetchall()[0][0] == 1
     temp_db.close()
     return res
+
+def get_client_obj(username) :
+    for client in clients :
+        if client.username() == username :
+            return client
+    return False
 
 def broadcast(message, client):
     """
@@ -64,7 +61,7 @@ def broadcast(message, client):
     """
     for user in clients:
         if user != client:
-            user.connection().send((f" {message}").encode())
+            user.connection().send((f"Message venant de {client.username()} : \n {message}").encode())
     #############################################
     ############INSERTION PSEUDO#################
     #############################################
@@ -76,7 +73,7 @@ def first_connection(client,attempts=0) :
             return False
         temp_db=sqlite3.connect(path_db)
         temp_cur=temp_db.cursor()
-        if load_user_name(client) == True :
+        if load_user_name(client.username()) == True :
             client.connection().send(("Quel est votre mot de passe ?").encode())
             password = client.connection().recv(1024).decode()
             temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username()}' AND password='{password}';")
@@ -85,7 +82,7 @@ def first_connection(client,attempts=0) :
                 temp_db.close()
                 return True
             else :
-                client.connection().send(f"Vous avez {attempts} mauvaise(s) tentative(s), veuillez recommencer".encode())
+                client.connection().send(f"Vous avez {attempts+1} mauvaise(s) tentative(s), veuillez recommencer".encode())
                 temp_db.close()
                 return first_connection(client, attempts+1)
 
@@ -165,6 +162,33 @@ def receiver_is_online(username) :
             return client
     return False
 
+def amities(client) :
+    temp_db=sqlite3.connect(path_db)
+    temp_cur=temp_db.cursor()
+    temp_cur.execute(f'select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = "{client.username()}") UNION select user1 as user from Amities where user2 in (select id from entite where user = "{client.username()}"));')
+    res = temp_cur.fetchall()
+    temp_db.close()
+    print(res)
+    return res
+
+def creation_amitie(client,receiver) :
+    if receiver in amities(client) :
+        client.connection().send(f"Vous êtes déjà ami avec {receiver}")
+    else :
+        if load_user_name(receiver) != False :
+            temp_db = sqlite3.connect(path_db)
+            temp_cur = temp_db.cursor()
+            temp_cur.execute(f"select id from entite where user = '{client.username()}';")
+            client_database_id = str(temp_cur.fetchall()[0][0])
+            temp_cur.execute(f"select id from entite where user = '{receiver}';")
+            receiver_database_id = str(temp_cur.fetchall()[0][0])
+            print(f"insert into Amities (user1,user2) values ({client_database_id},{receiver_database_id});")
+            temp_cur.execute(f"insert into Amities (user1,user2) values ({client_database_id},{receiver_database_id});")
+            temp_db.commit()
+            temp_db.close()
+        else :
+            client.connection().send(f"Le nom d'utilisateur {receiver} n'existe pas.".encode())
+
 def tell(message, client):
     """
     Envoie un message a un client specifique
@@ -184,15 +208,15 @@ def tell(message, client):
 def help():
     return "________________________________________________________\n|- /users : liste des utilisateurs connecté\n|- /msg <username> <message> : envoyer un message privé\n|- /help : afficher ce message\n\________________________________________________________"
     
-def leave(conn) :
+def leave(client) :
     try :
-        conn.send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?".encode())
-        message=conn.recv(1024).decode()
+        client.connection().send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?".encode())
+        message=client.connection().recv(1024).decode()
         if message not in ["oui","non"] :
-            conn.send("Nous n'avons pas compris votre requête.".encode())
-            return leave(conn)
+            client.connection().send("Nous n'avons pas compris votre requête.".encode())
+            return leave(client)
         elif message == "oui" :
-            conn.send("Vous allez être déconnecté".encode())
+            client.connection().send("Vous allez être déconnecté".encode())
             return True
         else :
             return False
@@ -257,13 +281,20 @@ def handle_client(conn, addr):
             elif message.startswith("/exit") :
                 if leave(client) :
                     client.disconnect()
-                
+
+            elif message == "/friends" :
+                client.connection().send(f"Tes amis sont : \n {','.join(amities(client)[0])}".encode())
+
+            elif message.startswith("/befriend") :
+                message = " ".join(message.split(" ")[1:])
+                print(message)
+                creation_amitie(client, message)
+
             elif message.startswith("/") :
                 client.connection().send("La commande que vous avez entré est invalide".encode())
 
             else:
-                entete=f"Message venant de {client.username()} : \n "
-                broadcast(entete+message, client)
+                broadcast(message, client)
         except:
             client.disconnect()
     try :
@@ -272,9 +303,9 @@ def handle_client(conn, addr):
         
     except :
         connected = False
-        clients.remove(conn)
-        conn.close()
-        print(f"📴 | Connection closed from {addr}")
+        clients.remove(client)
+        client.disconnect()
+        print(f"📴 | Connection closed from {client.address()}")
 
 def start_server():
     """
