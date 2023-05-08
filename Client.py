@@ -24,7 +24,6 @@ host="91.173.148.254"
 port = 24444
 sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
 sock.connect((host,port))
-
 send_thread = threading.Thread(target=send_message, args=(sock,))
 receive_thread = threading.Thread(target=receive_message, args=(sock,))
 receive_thread.start()

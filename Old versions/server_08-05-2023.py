@@ -2,15 +2,10 @@ import socket, threading, sqlite3
 
 class Client :
     def __init__(self,conn,addr,user) :
-        temp_db = sqlite3.connect(path_db)
-        temp_cur = temp_db.cursor()
-        temp_cur.execute(f"SELECT id FROM entite WHERE user = '{user}';")
-        self.db_id = temp_cur.fetchall()[0][0]
         self.user = user
         self.conn = conn
         self.addr = addr
         self.connected = True
-        temp_db.close()
 
     def username(self) :
         return str(self.user)
@@ -27,16 +22,6 @@ class Client :
     def disconnect(self) :
         self.connected = False
 
-    def id(self) :
-        return self.db_id
-
-    def send(self,message) :
-        self.conn.send(message.encode())
-
-    def receive(self) :
-        message = self.conn.recv(1024)
-        return message.decode()
-
 clients = []
 path_db='/home/freebox/server/users.db'
 
@@ -52,9 +37,9 @@ users_ip = {}
 
 def load_user_name(username):
     """
-    Permet de savoir si un nom d'utilisateur est déjà pris
-    True = found
-    False = inexistant 
+    find a user by name
+    code 1 = found
+    code 0 = inexistant 
     """
     temp_db = sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
@@ -65,28 +50,6 @@ def load_user_name(username):
     return res
 
 def get_client_obj(username) :
-    """ 
-    -----------
-    Description
-    -----------
-        Fonction permettant d'obtenir l'objet de connexion d'un client si il est en ligne, nous permettant de
-        lui envoyer des messages.
-
-    -------
-    Entrees
-    -------
-    username :
-        str, nom d'utilisateur à rechercher parmis les utilisateurs en ligne
-        
-    -------
-    Sorties
-    -------
-    Si le client recherché est en ligne :
-        client, objet de classe client contenant toutes ses informations importantes
-    Sinon :
-        False, le client recherché est hors ligne
-
-    """
     for client in clients :
         if client.username() == username :
             return client
@@ -94,25 +57,14 @@ def get_client_obj(username) :
 
 def broadcast(message, client):
     """
-    -----------
-    Description
-    -----------
-        Fonction permettant de distribuer un message à tous les utilisateurs en ligne
-
-    -------
-    Entrees
-    -------
-    message :
-        str, message à envoyer
-    client :
-        classe Client, désignant l'instance de connexion du client à l'origine de l'envoi.
-    -------
-    Sorties
-    -------
+    Envoie un message à tous les clients, sauf à l'expéditeur.
     """
     for user in clients:
         if user != client:
-            user.send((f"Message venant de {client.username()} : \n {message}"))
+            user.connection().send((f"Message venant de {client.username()} : \n {message}").encode())
+    #############################################
+    ############INSERTION PSEUDO#################
+    #############################################
 
 def first_connection(client,attempts=0) :
     try :
@@ -167,18 +119,28 @@ def create_user(client) :
     count = 0
     while True :
         try :
-            client.send(("Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :"))
-            psw = client.receive(1024)
-            client.send(("Confirmez votre saisie :"))
+            client.connection().send(("Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :").encode())
+            data = client.connection().recv(1024)
+            if not data:
+                return False
+            message = data.decode()
+            psw1 = str(message)
+            client.connection().send(("Confirmez votre saisie :").encode())
+            data = client.connection().recv(1024)
+            if not data:
+                return False
+            message=data.decode()
+            psw2 = message
+
             if(count>=2) :
-                client.send(("Vous avez essayé 3 fois, veuillez recommencer plus tard."))
+                client.connection().send(("Vous avez essayé 3 fois, veuillez recommencer plus tard.").encode())
                 return False
 
-            elif psw==client.receive() and count < 3 :
+            elif psw1==psw2 and count < 3 :
                 try :
                     temp_db=sqlite3.connect(path_db)
                     temp_cur=temp_db.cursor()
-                    temp_cur.execute(f"INSERT INTO entite (user,password) VALUES ('{client.username()}','{psw}');")
+                    temp_cur.execute("INSERT INTO entite (user,password) VALUES ('"+client.username()+"','"+psw1+"');")
                     temp_db.commit()
                     print(f"L'utilisateur {client.username()} vient d'être ajouté à la base de données.")
                     temp_db.close()
@@ -190,7 +152,7 @@ def create_user(client) :
             else :
                 message = "Vos mots de passes ne correspondent pas, veuillez recommencer."
                 count+=1
-                client.send(message)
+                client.connection().send(message.encode())
         except :
             return False
 
@@ -209,73 +171,23 @@ def amities(client) :
     print(res)
     return res
 
-def requete_amis(client,receiver) :
-    print(client.id())
-    receiver = " ".join(receiver.split(" "))
-    amis = amities(client)
-    if amis != [] :
-        if receiver in amities(client)[0] :
-            client.connection().send(f"Vous êtes déjà ami avec {receiver}")
-    if load_user_name(receiver) != False :
-        temp_db = sqlite3.connect(path_db)
-        temp_cur = temp_db.cursor()
-        temp_cur.execute(f"select id from entite where user = '{receiver}';")
-        receiver_database_id = str(temp_cur.fetchall()[0][0])
-        print(f"insert into Amities (user1,user2) values ({client_database_id},{receiver_database_id});")
-        temp_cur.execute(f"insert into Requetes_Amis (sender,receiver) values ({client_database_id},{receiver_database_id});")
-        temp_db.commit()
-        temp_db.close()
-        client.connection().send(f"Votre demande d'ami envers {receiver} a été envoyée !".encode())
+def creation_amitie(client,receiver) :
+    if receiver in amities(client) :
+        client.connection().send(f"Vous êtes déjà ami avec {receiver}")
     else :
-        client.connection().send(f"Le nom d'utilisateur {receiver} n'existe pas.".encode())
-
-def demande_amis(client,message) :
-    temp_db = sqlite3.connect(path_db)
-    temp_cur = temp_db.cursor()
-    temp_cur.execute(f"select req_id,user from Req_Amis join entite on Req_Amis.sender = entite.id where receiver = {client.id()};")
-    ans = temp_cur.fetchall()
-    if ans != [] :
-        for i in range(len(ans)) :
-            ans[i] = (str(ans[i][0]),ans[i][1] + "\n")
-        print(ans)
-        temp_db.close()
-        res = []
-        for element in ans :
-            res.append(element)
-        client.connection().send((f"Ces personnes vous ont demandé(e) en ami(e) : \n").encode())
-        client.connection().send("<Identifiant demande d'ami> | <Personne à l'origine de la demande>\n".encode())
-        client.connection().send("------------------------------------------------------------------\n".encode())
-        for i in res :
-            client.connection().send((" | ".join(i)).encode())
-            client.connection().send("\n".encode())
-            return True # Pour indiquer que le client a des demandes d'amis
-    else :
-        client.send("Vous n'avez aucune nouvelle demande d'amis.")
-        return False # Pour indiquer que le client n'a aucune demande d'amis
-    
-def amities_inbox(client,message) :
-    if demande_amis(client,message) :
-        client.send("Voulez-vous accepter une demande (oui/non) ?")
-        answer = client.receive()
-        if answer == "oui" :
-            client.send("Quelle est l'identifiant de la demande à accepter ?")
-            id = client.receive()
+        if load_user_name(receiver) != False :
             temp_db = sqlite3.connect(path_db)
             temp_cur = temp_db.cursor()
-            temp_cur.execute(f"select count(req_id) from Req_Amis where req_id = {id} and receiver = {client.id()};")
-            requete = temp_cur.fetchall()[0][0]
-            if requete==1 :
-                print(f"insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = {id}; delete from Req_Amis where req_id = {id};")
-                temp_cur.execute(f"insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = {id};")
-                temp_cur.execute(f"delete from Req_Amis where req_id = {id};")
-                temp_db.commit()
-                temp_db.close()
-            else :
-                client.send("Aucune demande trouvée pour cet identifiant.")
-                temp_db.close()
-        elif answer == "non" :
-            client.send("D'accord, retour aux messages !")
+            temp_cur.execute(f"select id from entite where user = '{client.username()}';")
+            client_database_id = str(temp_cur.fetchall()[0][0])
+            temp_cur.execute(f"select id from entite where user = '{receiver}';")
+            receiver_database_id = str(temp_cur.fetchall()[0][0])
+            print(f"insert into Amities (user1,user2) values ({client_database_id},{receiver_database_id});")
+            temp_cur.execute(f"insert into Amities (user1,user2) values ({client_database_id},{receiver_database_id});")
+            temp_db.commit()
             temp_db.close()
+        else :
+            client.connection().send(f"Le nom d'utilisateur {receiver} n'existe pas.".encode())
 
 def tell(message, client):
     """
@@ -291,6 +203,7 @@ def tell(message, client):
         client.connection().send((f"me -> {str(receiver.username())} : {message}").encode())
     else:
         client.connection().send((f"X User {receiver_username} not found X").encode())
+
 
 def help():
     return "________________________________________________________\n|- /users : liste des utilisateurs connecté\n|- /msg <username> <message> : envoyer un message privé\n|- /help : afficher ce message\n\________________________________________________________"
@@ -317,6 +230,7 @@ def online_users(client) :
             user_list.append(user.username())
     return ",".join(user_list)
     
+
 def handle_client(conn, addr):
     """
     Fonction pour gérer les connexions entrantes des clients
@@ -369,21 +283,12 @@ def handle_client(conn, addr):
                     client.disconnect()
 
             elif message == "/friends" :
-                friends = amities(client)
-                if friends != [] :
-                    client.send("Tes amis sont : \n ")
-                    for result in friends :
-                        print(result)
-                        client.send(f"{result[0]} \n")
-                else :
-                    client.send("Tu n'es ami avec personne pour le moment.")
-
-            elif message.startswith("/friend_requests") :
-                amities_inbox(client, message)
+                client.connection().send(f"Tes amis sont : \n {','.join(amities(client)[0])}".encode())
 
             elif message.startswith("/befriend") :
+                message = " ".join(message.split(" ")[1:])
                 print(message)
-                requete_amis(client, message)
+                creation_amitie(client, message)
 
             elif message.startswith("/") :
                 client.connection().send("La commande que vous avez entré est invalide".encode())
