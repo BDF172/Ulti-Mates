@@ -1,10 +1,12 @@
-import socket, threading, sqlite3
+import socket, threading, sqlite3, time
+import end_to_end_encryption as e2ee
 
 class Client :
-    def __init__(self,conn,addr,user) :
+    def __init__(self,conn,addr,key,user) :
         self.user = user
         self.conn = conn
         self.addr = addr
+        self.key = key
         self.connected = True
         self.db_id = self.registered()
 
@@ -26,12 +28,12 @@ class Client :
     def id(self) :
         return self.db_id
 
-    def send(self,message) :
-        self.conn.send(message.encode())
+    def send(self,message:str) :
+        self.conn.send(e2ee.encrypt_message(message, self.key))
 
     def receive(self) :
-        message = self.conn.recv(1024)
-        return message.decode()
+        return e2ee.decrypt_message(self.conn.recv(1024), self.key)
+    
 
     def registered(self) :
         temp_db = sqlite3.connect(path_db)
@@ -44,7 +46,8 @@ class Client :
         temp_db.close()
 
 clients = []
-path_db='/home/freebox/server/users.db'
+# path_db='/home/freebox/server/users.db'
+path_db = 'D:\\VS_Python_Project\\Ulti-Mates\\Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -119,8 +122,8 @@ def broadcast(message, client):
         Rien n'est renvoyé, en revanche un message est diffusé sur la console de tous les membres en ligne.
     """
     for user in clients:
-        if user != client:
-            user.send((f"Message venant de {client.username()} : \n {message}"))
+        if user.username() != client.username():
+            user.send((f"<{client.username()}> {message}"))
 
 def first_connection(client,attempts=0) :
     """
@@ -146,33 +149,47 @@ def first_connection(client,attempts=0) :
         if attempts==2 :
             client.send("Vous avez fait trop d'erreurs, vous allez être déconnecté(e).")
             return False
+        
         temp_db=sqlite3.connect(path_db)
         temp_cur=temp_db.cursor()
+
         if load_user_name(client.username()) == True :  # Vérifie que le nom d'utilisateur entré existe dans la base de données.
+            
+            print(f"👉 | {client.username()} is trying to connect")
+
             client.send("Quel est votre mot de passe ?")
             password = client.receive()
             temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username()}' AND password='{password}';")
             if temp_cur.fetchall()[0][0]==1 :
+
+                print(f"👉 | {client.username()} is connected")
+
                 client.send("Vous êtes connecté(e) !")
                 temp_db.close()
                 return True
             else :
+                print(f"👉 | {client.username()} failed to connect (too many failed attempts))")
+
                 client.send(f"Vous avez {attempts+1} mauvaise(s) tentative(s), veuillez recommencer")
                 temp_db.close()
                 return first_connection(client, attempts+1)
 
         else :  # Si le nom d'utilisateur entré n'existe pas, la console proposera à l'utilisateur de créer un compte
             temp_db.close()
+            print(f"👉 |{client.username()} is trying to create an account")
             etapes_creation_compte = create_user(client)
             if etapes_creation_compte == True : # La fonction nous renverra True si le compte est créé avec succès.
-                print(f"L'utilisateur {client.username()} vient de créer son compte !")
+                print(f"✅ | {client.username()} created an account")
+
                 client.send("Votre compte a été créé ! \nVous allez être déconnecté, veuillez vous reconnecter.")
                 client.disconnect()
                 return True
             elif etapes_creation_compte == "#USER_INPUT_MISTAKE#" :
                 return "#USER_INPUT_MISTAKE#"
             else:
-                print(f"L'utilisateur {client.username()} provenant de l'ip ({client.address()}) n'a pas créé son compte.")
+                
+                print(f"❌ | {client.username()} failed to create an account")
+
                 return False
     except :
         return False
@@ -208,28 +225,32 @@ def create_user(client) :
         count = 0
         while True :
             try :
+                print(f"👉 |{client.username()} is creating an account")
+
                 client.send(("Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :"))
                 psw = client.receive()
                 client.send(("Confirmez votre saisie :"))
                 confirmation = client.receive()
                 if(count>=2) :
+                    print(f"❌ | {client.username()} failed to create an account (too many failed attempts)")
                     client.send(("Vous avez essayé 3 fois, veuillez recommencer plus tard."))
                     return False
 
-                elif psw==confirmation and count < 3 :
+                elif psw == confirmation and count < 3 :
                     try :
                         temp_db=sqlite3.connect(path_db)
                         temp_cur=temp_db.cursor()
                         temp_cur.execute(f"INSERT INTO entite (user,password) VALUES ('{client.username()}','{psw}');")
                         temp_db.commit()
-                        print(f"L'utilisateur {client.username()} vient d'être ajouté à la base de données.")
+                        print(f"✅ | L'utilisateur {client.username()} vient d'être ajouté à la base de données.")
                         temp_db.close()
                         return True
                     except :
-                        print(f"Un problème est survenu lors de la création du compte pour l'utilisateur {client.username()}")
+                        print(f"❌ | Un problème est survenu lors de la création du compte pour l'utilisateur {client.username()}")
                         return False
             
                 else :
+                    print(f"❌ | ")
                     message = "Vos mots de passes ne correspondent pas, veuillez recommencer."
                     count+=1
                     client.send(message)
@@ -387,37 +408,73 @@ def online_users(client) :
             user_list.append(user.username())
     return ",".join(user_list)
     
-def handle_client(conn, addr, first_time=True):
+
+def handshake(message):
+    """
+    when a client to the server, it frst sends a message containing the encryption key that need to be decrypted with the fix_token
+    """
+    decrypted_message = e2ee.decrypt_message(message, e2ee.fix_token)
+
+    return (True, decrypted_message) if len(decrypted_message) == 128 else (False, '')
+
+
+def handle_client(conn, addr, first_time=True, handshaked=False):
     """
     Fonction pour gérer les connexions entrantes des clients
     """
+              
+    print(f"------------------------------------\
+          \n🔓 | Handshake de {addr} en cours...")
+    if not handshaked :
+        handshaked, key = handshake(conn.recv(1024))
+        if handshaked :
+            conn.send(e2ee.encrypt_message(key, e2ee.fix_token))
+        else :
+            print(f"❌ | Handshake de {addr} échoué")
+            conn.close()
+            return None
+    
+
+    print(f"🔐 | Handshake de {addr} terminé")
+
     if first_time == True :
         print(f"🌐 | New connection from {addr}")
+        
     try :
-        conn.send(("Vous venez de vous connectez à notre serveur, entrez votre nom ou un pseudonyme").encode())
-        user = conn.recv(1024)
+        print(f"👤 | {addr} demande d'un nom d'utilisateur")
+        conn.send(e2ee.encrypt_message("Vous venez de vous connectez à notre serveur, entrez votre nom ou un pseudonyme", key))
+        user = e2ee.decrypt_message(conn.recv(1024), key)
+        print(user)
     except :
         conn.close()
         return None
+    
     if not user :
         conn.close()
         return None
-    client=Client(conn, addr, user.decode())
+    
+    print(f"👤 | {addr} a choisi le nom d'utilisateur {user}")
+
+    client = Client(conn, addr, key, user) 
     clients.append(client)
+
     try :
         etapes_connexion_finies = first_connection(client)
         if etapes_connexion_finies == "#USER_INPUT_MISTAKE#" :
             client.disconnect()
             clients.remove(client)
             return handle_client(client.connection(),client.address(),False)
+        
         elif etapes_connexion_finies == False :
             print(f"L'utilisateur {client.username()} venant de l'adresse IP {client.address()} a échoué sa connexion.")
             client.disconnect()
+
         if client.connection_status() :
             print(f"L'utilisateur {client.username()} a réussi sa connexion sur l'adresse IP {client.address()}.")
             broadcast("👉 | New connection from "+str(client.username()), client)
             print("broad")
             client.send("Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !")
+        
         while client.connection_status():
             try:
                 message = client.receive() 
@@ -431,7 +488,7 @@ def handle_client(conn, addr, first_time=True):
                     client.send("Les utilisateurs en ligne sont : \n "+str(online_users(client)))
 
                 elif message.startswith("/help"):
-                    client.send(help().encode())
+                    client.send(help())
                 
                 elif message.startswith("/whoami") :
                     client.send(client.username())
@@ -481,7 +538,8 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    HOST = '192.168.1.83'
+    # HOST = '192.168.1.83'
+    HOST = '127.0.0.1'
     PORT = 4444
 
     # Créer un socket

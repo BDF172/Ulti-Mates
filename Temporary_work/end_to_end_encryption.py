@@ -9,7 +9,11 @@ def generate_token():
 
 
 def encrypt_message(message: str, token: str):
-    """Encrypt a message with a token."""
+    """
+    Encrypt <message> with <token>
+    -
+    Encrypt a message with a token.
+    """
     binary_message = message.encode()
     binary_token = token.encode()
     
@@ -22,7 +26,11 @@ def encrypt_message(message: str, token: str):
 
 
 def decrypt_message(encrypted_message: bytearray, token: str):
-    """Decrypt a message with a token."""
+    """
+    Decrypt <encrypted_message> with <token>
+    -
+    Decrypt a message with a token.
+    """
     binary_token = token.encode()
     decrypted_message = bytearray()
 
@@ -54,4 +62,4 @@ def main():
     print("\nEncryption valid\n" if decrypted_message == message else "\nEncryption failed\n")
 
 
-main()
+# main()
