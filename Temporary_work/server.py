@@ -1,6 +1,12 @@
 import socket, threading, sqlite3
 
 class Client :
+    def __init__(self,conn,addr,user) :
+        self.user = user
+        self.conn = conn
+        self.addr = addr
+        self.connected = True
+        self.db_id = self.registered()
 
     def username(self) :
         return str(self.user)
@@ -36,13 +42,6 @@ class Client :
             return temp_cur.fetchall()[0][0]
         return False
         temp_db.close()
-
-    def __init__(self,conn,addr,user) :
-        self.user = user
-        self.conn = conn
-        self.addr = addr
-        self.connected = True
-        self.db_id = self.registered()
 
 clients = []
 path_db='/home/freebox/server/users.db'
@@ -150,7 +149,7 @@ def first_connection(client,attempts=0) :
         temp_db=sqlite3.connect(path_db)
         temp_cur=temp_db.cursor()
         if load_user_name(client.username()) == True :  # Vérifie que le nom d'utilisateur entré existe dans la base de données.
-            client.connection().send(("Quel est votre mot de passe ?").encode())
+            client.send(Quel est votre mot de passe ?")
             password = client.receive()
             temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username()}' AND password='{password}';")
             if temp_cur.fetchall()[0][0]==1 :
@@ -271,7 +270,7 @@ def requete_amis(client,receiver) :
         receiver_database_id = str(temp_cur.fetchall()[0][0])
         print(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
         temp_cur.execute(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
-        client.connection().send(f"Votre demande d'ami envers {receiver} a été envoyée !".encode())
+        client.send(f"Votre demande d'ami envers {receiver} a été envoyée !")
     else :
         client.send(f"Le nom d'utilisateur {receiver} n'existe pas.")
     temp_db.commit()
@@ -290,12 +289,12 @@ def demande_amis(client,message) :
         res = []
         for element in ans :
             res.append(element)
-        client.connection().send((f"Ces personnes vous ont demandé(e) en ami(e) : \n").encode())
-        client.connection().send("<Identifiant demande d'ami> | <Personne à l'origine de la demande>\n".encode())
-        client.connection().send("------------------------------------------------------------------\n".encode())
+        client.send((f"Ces personnes vous ont demandé(e) en ami(e) : \n"))
+        client.send("<Identifiant demande d'ami> | <Personne à l'origine de la demande>\n")
+        client.send("------------------------------------------------------------------\n")
         for i in res :
-            client.connection().send((" | ".join(i)).encode())
-            client.connection().send("\n".encode())
+            client.send((" | ".join(i)))
+            client.send("\n")
             return True # Pour indiquer que le client a des demandes d'amis
     else :
         client.send("Vous n'avez aucune nouvelle demande d'amis.")
@@ -347,6 +346,7 @@ def who_is_blocked(client) :
             client.send("D'accord, retour aux messages !")
         else :
             client.send("")
+
 def tell(message, client):
     """
     Envoie un message a un client specifique
@@ -357,23 +357,23 @@ def tell(message, client):
     message = " ".join(message[2:])
 
     if receiver != False:
-        receiver.connection().send((f"{str(client.username())} -> me : {message}").encode())
-        client.connection().send((f"me -> {str(receiver.username())} : {message}").encode())
+        receiver.send(f"{str(client.username())} -> me : {message}")
+        client.send(f"me -> {str(receiver.username())} : {message}")
     else:
-        client.connection().send((f"X User {receiver_username} not found X").encode())
+        client.send(f"X User {receiver_username} not found X")
 
 def help():
     return "________________________________________________________\n|- /users : liste des utilisateurs connecté\n|- /msg <username> <message> : envoyer un message privé\n|- /help : afficher ce message\n\________________________________________________________"
     
 def leave(client) :
     try :
-        client.connection().send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?".encode())
-        message=client.connection().recv(1024).decode()
+        client=.send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
+        message=client.receive()
         if message not in ["oui","non"] :
-            client.connection().send("Nous n'avons pas compris votre requête.".encode())
+            client=.send("Nous n'avons pas compris votre requête.")
             return leave(client)
         elif message == "oui" :
-            client.connection().send("Vous allez être déconnecté".encode())
+            client.=send("Vous allez être déconnecté")
             return True
         else :
             return False
@@ -428,13 +428,13 @@ def handle_client(conn, addr, first_time=True):
                     tell(message, client)
 
                 elif message.startswith("/users"):
-                    client.connection().send(("Les utilisateurs en ligne sont : \n "+str(online_users(client))).encode())
+                    client.send("Les utilisateurs en ligne sont : \n "+str(online_users(client)))
 
                 elif message.startswith("/help"):
-                    client.connection().send(help().encode())
+                    client.send(help().encode())
                 
                 elif message.startswith("/whoami") :
-                    client.connection().send(client.username().encode())
+                    client.send(client.username())
 
                 elif message.startswith("/exit") :
                     if leave(client) :
