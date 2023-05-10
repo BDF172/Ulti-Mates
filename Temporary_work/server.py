@@ -149,7 +149,7 @@ def first_connection(client,attempts=0) :
         temp_db=sqlite3.connect(path_db)
         temp_cur=temp_db.cursor()
         if load_user_name(client.username()) == True :  # Vérifie que le nom d'utilisateur entré existe dans la base de données.
-            client.send(Quel est votre mot de passe ?")
+            client.send("Quel est votre mot de passe ?")
             password = client.receive()
             temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username()}' AND password='{password}';")
             if temp_cur.fetchall()[0][0]==1 :
@@ -367,13 +367,13 @@ def help():
     
 def leave(client) :
     try :
-        client=.send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
+        client.send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
         message=client.receive()
         if message not in ["oui","non"] :
-            client=.send("Nous n'avons pas compris votre requête.")
+            client.send("Nous n'avons pas compris votre requête.")
             return leave(client)
         elif message == "oui" :
-            client.=send("Vous allez être déconnecté")
+            client.send("Vous allez être déconnecté")
             return True
         else :
             return False
