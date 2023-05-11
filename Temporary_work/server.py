@@ -41,8 +41,8 @@ class Client :
         temp_db.close()
 
 clients = {}
-# path_db='/home/freebox/server/users.db'
-path_db = 'Temporary_work\\users.db'
+path_db='/home/freebox/server/users.db'
+#path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -392,8 +392,13 @@ def help():
     help_ += "|                                                                 | \n"
     help_ += "+-----------------------------------------------------------------+ \n"
     help_ += "|- /msg <username> <message> : envoyer un message privé           | \n"
-    help_ += "|- /users                    : affiche les utilisateurs connecté  | \n"
+    help_ += "|- /users                    : afficher les utilisateurs connecté | \n"
     help_ += "|- /help                     : afficher ce message                | \n"
+    help_ += "|- /friends                  : afficher la liste de vos amis      | \n"
+    help_ += "|- /friend_requests          : afficher les demandes d'amis       | \n"
+    help_ += "|- /befriend <username>      : faire une demande d'ami            | \n"
+    help_ += "|- /who_is_blocked           : afficher les personnes bloquées    | \n"
+    help_ += "|- /exit                     : quitter le programme               | \n"
     help_ += "\_________________________________________________________________/ \n"
     return help_
     
@@ -558,8 +563,8 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    # HOST = '192.168.1.83'
-    HOST = '127.0.0.1'
+    HOST = '192.168.1.83'
+    # HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
 
     # Créer un socket
