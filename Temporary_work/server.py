@@ -2,19 +2,13 @@ import socket, threading, sqlite3, time
 import end_to_end_encryption as e2ee
 
 class Client :
-    def __init__(self,conn,addr,key,user) :
-        self.user = user
+    def __init__(self,conn,adresse,key,user_name) :
+        self.username = user_name
         self.conn = conn
-        self.addr = addr
+        self.adresse = adresse
         self.key = key
         self.connected = True
         self.db_id = self.registered()
-
-    def username(self) :
-        return str(self.user)
-    
-    def address(self) :
-        return self.addr
 
     def connection(self) :
         return self.conn
@@ -39,14 +33,14 @@ class Client :
     def registered(self) :
         temp_db = sqlite3.connect(path_db)
         temp_cur = temp_db.cursor()
-        temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user = '{self.username()}'")
+        temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user = '{self.username}'")
         if temp_cur.fetchall()[0][0]==1 :
-            temp_cur.execute(f"SELECT id FROM entite WHERE user = '{self.username()}';")
+            temp_cur.execute(f"SELECT id FROM entite WHERE user = '{self.username}';")
             return temp_cur.fetchall()[0][0]
         return False
         temp_db.close()
 
-clients = []
+clients = {}
 # path_db='/home/freebox/server/users.db'
 path_db = 'Temporary_work\\users.db'
 
@@ -98,11 +92,11 @@ def get_client_obj(username) :
 
     """
     for client in clients :
-        if client.username() == username :
+        if client.username == username :
             return client
     return False
 
-def broadcast(message, client):
+def broadcast(message:str, client:Client):
     """
     -----------
     Description
@@ -122,9 +116,10 @@ def broadcast(message, client):
     None :
         Rien n'est renvoyé, en revanche un message est diffusé sur la console de tous les membres en ligne.
     """
-    for user in clients:
-        if user.username() != client.username():
-            user.send((f"<{client.username()}> {message}"))
+    for user in list(clients.keys()):
+        if clients[user].username != client.username:
+            clients[user].send((f"<{client.username}> {message}"))
+    return
 
 def first_connection(client,attempts=0) :
     """
@@ -154,22 +149,26 @@ def first_connection(client,attempts=0) :
         temp_db=sqlite3.connect(path_db)
         temp_cur=temp_db.cursor()
 
-        if load_user_name(client.username()) == True :  # Vérifie que le nom d'utilisateur entré existe dans la base de données.
+        if load_user_name(client.username) == True :  # Vérifie que le nom d'utilisateur entré existe dans la base de données.
             
-            print(f"👉 | {client.username()} is trying to connect")
+            print(f"👉 | {client.username} is trying to connect")
 
             client.send("Quel est votre mot de passe ?")
-            password = client.receive()
-            temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username()}' AND password='{password}';")
+            password = str(hash(client.receive()))
+            """
+            hash password
+            """
+            
+            temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username}' AND password='{password}';")
             if temp_cur.fetchall()[0][0]==1 :
 
-                print(f"👉 | {client.username()} is connected")
+                print(f"👉 | {client.username} is connected")
 
                 client.send("Vous êtes connecté(e) !")
                 temp_db.close()
                 return True
             else :
-                print(f"👉 | {client.username()} failed to connect (too many failed attempts))")
+                print(f"👉 | {client.username} failed to connect (too many failed attempts))")
 
                 client.send(f"Vous avez {attempts+1} mauvaise(s) tentative(s), veuillez recommencer")
                 temp_db.close()
@@ -177,10 +176,10 @@ def first_connection(client,attempts=0) :
 
         else :  # Si le nom d'utilisateur entré n'existe pas, la console proposera à l'utilisateur de créer un compte
             temp_db.close()
-            print(f"👉 |{client.username()} is trying to create an account")
+            print(f"👉 |{client.username} is trying to create an account")
             etapes_creation_compte = create_user(client)
             if etapes_creation_compte == True : # La fonction nous renverra True si le compte est créé avec succès.
-                print(f"✅ | {client.username()} created an account")
+                print(f"✅ | {client.username} created an account")
 
                 client.send("Votre compte a été créé ! \nVous allez être déconnecté, veuillez vous reconnecter.")
                 client.disconnect()
@@ -189,7 +188,7 @@ def first_connection(client,attempts=0) :
                 return "#USER_INPUT_MISTAKE#"
             else:
                 
-                print(f"❌ | {client.username()} failed to create an account")
+                print(f"❌ | {client.username} failed to create an account")
 
                 return False
     except :
@@ -226,14 +225,14 @@ def create_user(client) :
         count = 0
         while True :
             try :
-                print(f"👉 |{client.username()} is creating an account")
+                print(f"👉 |{client.username} is creating an account")
 
                 client.send(("Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :"))
-                psw = client.receive()
+                psw = str(hash(client.receive()))
                 client.send(("Confirmez votre saisie :"))
-                confirmation = client.receive()
+                confirmation = str(hash(client.receive()))
                 if(count>=2) :
-                    print(f"❌ | {client.username()} failed to create an account (too many failed attempts)")
+                    print(f"❌ | {client.username} failed to create an account (too many failed attempts)")
                     client.send(("Vous avez essayé 3 fois, veuillez recommencer plus tard."))
                     return False
 
@@ -241,13 +240,13 @@ def create_user(client) :
                     try :
                         temp_db=sqlite3.connect(path_db)
                         temp_cur=temp_db.cursor()
-                        temp_cur.execute(f"INSERT INTO entite (user,password) VALUES ('{client.username()}','{psw}');")
+                        temp_cur.execute(f"INSERT INTO entite (user,password) VALUES ('{client.username}','{psw}');")
                         temp_db.commit()
-                        print(f"✅ | L'utilisateur {client.username()} vient d'être ajouté à la base de données.")
+                        print(f"✅ | L'utilisateur {client.username} vient d'être ajouté à la base de données.")
                         temp_db.close()
                         return True
                     except :
-                        print(f"❌ | Un problème est survenu lors de la création du compte pour l'utilisateur {client.username()}")
+                        print(f"❌ | Un problème est survenu lors de la création du compte pour l'utilisateur {client.username}")
                         return False
             
                 else :
@@ -258,16 +257,11 @@ def create_user(client) :
             except :
                 return False
 
-def receiver_is_online(username) :
-    for client in clients :
-        if client.username()==username :
-            return client
-    return False
 
 def amities(client) :
     temp_db=sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
-    temp_cur.execute(f'select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = "{client.username()}") UNION select user1 as user from Amities where user2 in (select id from entite where user = "{client.username()}"));')
+    temp_cur.execute(f'select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = "{client.username}") UNION select user1 as user from Amities where user2 in (select id from entite where user = "{client.username}"));')
     res = temp_cur.fetchall()
     temp_db.close()
     return res
@@ -315,8 +309,7 @@ def demande_amis(client,message) :
         client.send("<Identifiant demande d'ami> | <Personne à l'origine de la demande>\n")
         client.send("------------------------------------------------------------------\n")
         for i in res :
-            client.send((" | ".join(i)))
-            client.send("\n")
+            client.send(str((" | ".join(i)), '\n'))
             return True # Pour indiquer que le client a des demandes d'amis
     else :
         client.send("Vous n'avez aucune nouvelle demande d'amis.")
@@ -345,6 +338,7 @@ def amities_inbox(client,message) :
         elif answer == "non" :
             client.send("D'accord, retour aux messages !")
             temp_db.close()
+            return None
 
 def who_is_blocked(client) :
     temp_db = sqlite3.connect(path_db)
@@ -375,14 +369,17 @@ def tell(message, client):
     """
     message = message.replace("/msg","").split(" ")
     receiver_username = message[1]
-    receiver = receiver_is_online(receiver_username)
+    try:
+        receiver = clients[receiver_username]
+    except KeyError:
+        receiver = None
     message = " ".join(message[2:])
 
-    if receiver != False:
-        receiver.send(f"{str(client.username())} -> me : {message}")
-        client.send(f"me -> {str(receiver.username())} : {message}")
+    if type(receiver) == type(client):
+        receiver.send(f"<{str(client.username)} -> me> {message}")
+        client.send(f"<me -> {str(receiver.username)}> {message}")
     else:
-        client.send(f"X User {receiver_username} not found X")
+        client.send(f"{receiver_username} does not exist or is not connected.")
 
 def help():
     return "________________________________________________________\n|- /users : liste des utilisateurs connecté\n|- /msg <username> <message> : envoyer un message privé\n|- /help : afficher ce message\n\________________________________________________________"
@@ -403,12 +400,12 @@ def leave(client) :
         return False
 
 def online_users(client) :
-    user_list = []
-    for user in clients :
-        if user != client :
-            user_list.append(user.username())
-    return ",".join(user_list)
+    """
+    generate a mesage containing every username
+    """
+    return str("Les utilisateurs en ligne sont :\n" + ", ".join(list(clients.keys())))
     
+
 
 def handshake(message):
     """
@@ -457,21 +454,21 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
     print(f"👤 | {addr} a choisi le nom d'utilisateur {user}")
 
     client = Client(conn, addr, key, user) 
-    clients.append(client)
+    clients[user] = client
 
     try :
         etapes_connexion_finies = first_connection(client)
         if etapes_connexion_finies == "#USER_INPUT_MISTAKE#" :
             client.disconnect()
-            clients.remove(client)
-            return handle_client(client.connection(),client.address(),False)
+            del clients[user]
+            return handle_client(client.connection(),client.adresse,False)
         
         elif etapes_connexion_finies == False :
-            print(f"L'utilisateur {client.username()} venant de l'adresse IP {client.address()} a échoué sa connexion.")
+            print(f"❌ | L'utilisateur {client.username} venant de l'adresse IP {client.adresse} a échoué sa connexion.")
             client.disconnect()
 
         if client.connection_status() :
-            print(f"L'utilisateur {client.username()} a réussi sa connexion sur l'adresse IP {client.address()}.")
+            print(f"✅ | L'utilisateur {client.username} a réussi sa connexion sur l'adresse IP {client.adresse}.")
             broadcast(f"has joined the chat", client)
             print("broad")
             client.send("Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !")
@@ -480,20 +477,17 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
             try:
                 message = client.receive() 
 
-                print(f"📳 | {client.username()},Received message: {message}")
+                print(f"📳 | {client.username},Received message: {message}")
 
                 if message.startswith("/msg"):
                     tell(message, client)
 
                 elif message.startswith("/users"):
-                    client.send("Les utilisateurs en ligne sont : \n "+str(online_users(client)))
+                    client.send(online_users(client))
 
                 elif message.startswith("/help"):
                     client.send(help())
                 
-                elif message.startswith("/whoami") :
-                    client.send(client.username())
-
                 elif message.startswith("/exit") :
                     if leave(client) :
                         client.disconnect()
@@ -525,13 +519,13 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                     broadcast(message, client)
             except:
                 client.disconnect()
-        clients.remove(client)
+        del clients[user]
         client.disconnect()
-        print(f"📴 | Connection closed from {client.address()}")
+        print(f"📴 | Connection closed to {client.adresse}")
     except :
-        clients.remove(client)
+        del clients[user]
         client.disconnect()
-        print(f"📴 | Connection closed from {client.address()}")
+        print(f"📴 | Connection closed to {client.adresse}")
 
 
 def start_server():

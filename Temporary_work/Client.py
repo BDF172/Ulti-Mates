@@ -85,64 +85,81 @@ def receive_message(sock) :
     while True :
         try:
             if sock.fileno() == -1:
-                return None
+                return False
             encrypted_message = sock.recv(1024)
-            if not encrypted_message:
-                return None
             message = e2ee.decrypt_message(encrypted_message, client_key)
-            # print("\033[1A\033[2K\r", end="")
             print(message)
         except OSError as e:
             print(f"Une erreur est survenue lors de la dernière réception de message: {e}")
-            return None
+            sock.close()
+            disconnect()
 
 
-# host = str(input("Adresse IP du serveur : "))
-# port = int(input("Port du serveur : "))
-
-# host="91.173.148.254"
-host="127.0.0.1"
-
-# port = 24444
-port = 4444
-
-print("\n> connexion au serveur", end="")
-try:
-    print(".", end="", flush=True)
-    sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-
-    print(".", end="", flush=True)
-    sock.connect((host,port))
-    
-    print(".", end="", flush=True)
-except:
-    print("\n> Impossible de se connecter au serveur !\n Vérifiez que le serveur est bien en ligne et que vous avez entré la bonne adresse IP et le bon port !\n ")
-    exit()
-
-send_thread = threading.Thread(target=send_message, args=(sock,))
-receive_thread = threading.Thread(target=receive_message, args=(sock,))
-
-start_handshake = time.time()
-while not handshake_done and time.time() - start_handshake < 10:
-    handshake_done = handshake(sock)
-
-if time.time() - start_handshake >= 10:
-    print("\n> handshake timeout !")
-    handshake_done = False
-    sock.close()
-else:
-    print("\n> handshake réussi !")
-    print("\n> handshake done in", time.time() - start_handshake, "seconds")
+def disconnect():
+    print("type '/reconnect' to attemps to reconnect, or '/exit' to quite")
+    reco = str(input('> '))
+    if reco == "/reconnect":
+        connect()
+    elif reco == '/exit':
+        exit()
+    else:
+        print("commande inconnu")
 
 
 
-if not handshake_done :
-    print("\n> cryptage de la connexion impossible !")
-    sock.close()
-    exit()
+def connect():
 
-if handshake_done :
-    print("\n> cryptage de la connexion établie !\nVous pouvez commencer à envoyer des messages en toute sécurité !\n--Début de l'authentification--\n")
+    global handshake_done
 
-send_thread.start()
-receive_thread.start()
+    connected = False
+
+    if not connected:
+
+        # host = str(input("Adresse IP du serveur : "))
+        # port = int(input("Port du serveur : "))
+
+        # host="91.173.148.254"
+        host="127.0.0.1"
+
+        # port = 24444
+        port = 4444
+
+        print("\n> connexion au serveur", end="")
+        try:
+            print(".", end="", flush=True)
+            sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+
+            print(".", end="", flush=True)
+            sock.connect((host,port))
+            
+            print(".", end="", flush=True)
+        except:
+            print("\n> Impossible de se connecter au serveur !\n Vérifiez que le serveur est bien en ligne et que vous avez entré la bonne adresse IP et le bon port !\n ")
+            connected = False
+
+        send_thread = threading.Thread(target=send_message, args=(sock,))
+        receive_thread = threading.Thread(target=receive_message, args=(sock,))
+
+        handshake_done = handshake(sock)
+
+        if handshake_done:
+            print("\n> handshake réussi !")
+        else:
+            print("\n> cryptage de la connexion impossible !")
+            sock.close()
+            disconnect()
+            connected = False
+
+        if handshake_done :
+            print("\n> cryptage de la connexion établie !\nVous pouvez commencer à envoyer des messages en toute sécurité !\n--Début de l'authentification--\n")
+            connected = True
+
+        send_thread.start()
+        receive_thread.start()
+
+    if not connected:
+        print("connexion error")
+        sock.close()
+        disconnect()
+
+connect()
