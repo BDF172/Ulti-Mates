@@ -60,21 +60,30 @@ def send_message(sock) :
 
     while True :
         message = str(input())
-        if username == "":
-            username = message
+        if message != '':
+            if message == "/exit":
+                sock.close()
+                exit()
 
-        print("\033[1A\033[2K\r", end="")
-        print(f"<{username}> {message}")
-        
-        if len(message) >= 1024:
-            print("\n> Message trop long !")
-            continue
-        
-        try :
-            sock.send(e2ee.encrypt_message(message, client_key))
-        except Exception as e:
-            print("\n> Impossible d'envoyer le message !")
-            print(traceback.format_exc())
+            if message == "/reconnect":
+                sock.close()
+                connect()
+
+            if username == "":
+                username = message
+
+            print("\033[1A\033[2K\r", end="")
+            print(f"<{username}> {message}")
+            
+            if len(message) >= 1024:
+                print("\n> Message trop long !")
+                continue
+            
+            try :
+                sock.send(e2ee.encrypt_message(message, client_key))
+            except Exception as e:
+                print("\n> Impossible d'envoyer le message !")
+                print(traceback.format_exc())
     
 def receive_message(sock) :
     """

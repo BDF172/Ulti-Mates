@@ -1,4 +1,4 @@
-import socket, threading, sqlite3, time
+import socket, threading, sqlite3, time, hashlib
 import end_to_end_encryption as e2ee
 
 class Client :
@@ -27,7 +27,7 @@ class Client :
         self.conn.send(e2ee.encrypt_message(message, self.key))
 
     def receive(self) :
-        return e2ee.decrypt_message(self.conn.recv(1024), self.key)
+        return str(e2ee.decrypt_message(self.conn.recv(1024), self.key))
     
 
     def registered(self) :
@@ -142,7 +142,7 @@ def first_connection(client,attempts=0) :
         Booléen vrai si la connexion est réussie.
     """
     try :
-        if attempts==2 :
+        if attempts == 2:
             client.send("Vous avez fait trop d'erreurs, vous allez être déconnecté(e).")
             return False
         
@@ -154,11 +154,10 @@ def first_connection(client,attempts=0) :
             print(f"👉 | {client.username} is trying to connect")
 
             client.send("Quel est votre mot de passe ?")
-            password = str(hash(client.receive()))
-            """
-            hash password
-            """
+            password = hashlib.sha1(client.receive().encode()).hexdigest()
             
+            print(password)
+
             temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username}' AND password='{password}';")
             if temp_cur.fetchall()[0][0]==1 :
 
@@ -228,9 +227,9 @@ def create_user(client) :
                 print(f"👉 |{client.username} is creating an account")
 
                 client.send(("Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :"))
-                psw = str(hash(client.receive()))
+                psw = hashlib.sha1(client.receive().encode()).hexdigest()
                 client.send(("Confirmez votre saisie :"))
-                confirmation = str(hash(client.receive()))
+                confirmation = hashlib.sha1(client.receive().encode()).hexdigest()
                 if(count>=2) :
                     print(f"❌ | {client.username} failed to create an account (too many failed attempts)")
                     client.send(("Vous avez essayé 3 fois, veuillez recommencer plus tard."))
@@ -307,7 +306,7 @@ def demande_amis(client,message) :
             res.append(element)
         client.send((f"Ces personnes vous ont demandé(e) en ami(e) : \n"))
         client.send("<Identifiant demande d'ami> | <Personne à l'origine de la demande>\n")
-        client.send("------------------------------------------------------------------\n")
+        client.send("\n------------------------------------------------------------------\n")
         for i in res :
             client.send(str((" | ".join(i)), '\n'))
             return True # Pour indiquer que le client a des demandes d'amis
@@ -382,8 +381,24 @@ def tell(message, client):
         client.send(f"{receiver_username} does not exist or is not connected.")
 
 def help():
-    return "________________________________________________________\n|- /users : liste des utilisateurs connecté\n|- /msg <username> <message> : envoyer un message privé\n|- /help : afficher ce message\n\________________________________________________________"
+
+    """
+    ascii art of 'help' HELP
+    """
+    help_ ="\n _________________________________________________________________  \n"
+    help_ += "/                               _     _                           \ \n"
+    help_ += "|                          |_| |_ |  |_)                          | \n"
+    help_ += "|                          | | |_ |_ |                            | \n"
+    help_ += "|                                                                 | \n"
+    help_ += "+-----------------------------------------------------------------+ \n"
+    help_ += "|- /users                    : liste des utilisateurs connecté    | \n"
+    help_ += "|- /msg <username> <message> : envoyer un message privé           | \n"
+    help_ += "|- /users                    : affiche les utilisateurs connecté  | \n"
+    help_ += "|- /help                     : afficher ce message                | \n"
+    help_ += "\_________________________________________________________________/  \n"
+    return help_
     
+
 def leave(client) :
     try :
         client.send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
@@ -399,11 +414,22 @@ def leave(client) :
     except :
         return False
 
-def online_users(client) :
+
+def online_users() :
     """
     generate a mesage containing every username
     """
-    return str("Les utilisateurs en ligne sont :\n" + ", ".join(list(clients.keys())))
+    users_line = ""
+    for user in list(clients.keys()):
+        users_line += f"|- {user}{' '*(36 - len(user))}|\n"
+
+    line ="\n ______________________________________\n"
+    line += "/                                      \ \n"
+    line += "| Utilisateurs actuellement en ligne : |\n"
+    line += users_line
+    line += "\______________________________________/\n"
+
+    return line
     
 
 
@@ -421,7 +447,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
     Fonction pour gérer les connexions entrantes des clients
     """
               
-    print(f"------------------------------------\
+    print(f"\n------------------------------------\
           \n🔓 | Handshake de {addr} en cours...")
     if not handshaked :
         handshaked, key = handshake(conn.recv(1024))
@@ -471,7 +497,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
             print(f"✅ | L'utilisateur {client.username} a réussi sa connexion sur l'adresse IP {client.adresse}.")
             broadcast(f"has joined the chat", client)
             print("broad")
-            client.send("Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !")
+            client.send("Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !\n ")
         
         while client.connection_status():
             try:
@@ -483,7 +509,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                     tell(message, client)
 
                 elif message.startswith("/users"):
-                    client.send(online_users(client))
+                    client.send(online_users())
 
                 elif message.startswith("/help"):
                     client.send(help())
