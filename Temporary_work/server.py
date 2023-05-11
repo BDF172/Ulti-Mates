@@ -48,7 +48,7 @@ class Client :
 
 clients = []
 # path_db='/home/freebox/server/users.db'
-path_db = 'D:\\VS_Python_Project\\Ulti-Mates\\Temporary_work\\users.db'
+path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
