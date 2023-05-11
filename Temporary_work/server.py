@@ -393,11 +393,11 @@ def help():
     help_ += "+-----------------------------------------------------------------+ \n"
     help_ += "|- /msg <username> <message> : envoyer un message privé           | \n"
     help_ += "|- /users                    : afficher les utilisateurs connecté | \n"
-    help_ += "|- /help                     : afficher ce message                | \n"
     help_ += "|- /friends                  : afficher la liste de vos amis      | \n"
     help_ += "|- /friend_requests          : afficher les demandes d'amis       | \n"
     help_ += "|- /befriend <username>      : faire une demande d'ami            | \n"
     help_ += "|- /who_is_blocked           : afficher les personnes bloquées    | \n"
+    help_ += "|- /help                     : afficher ce message                | \n"
     help_ += "|- /exit                     : quitter le programme               | \n"
     help_ += "\_________________________________________________________________/ \n"
     return help_
