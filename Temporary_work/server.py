@@ -391,11 +391,10 @@ def help():
     help_ += "|                          | | |_ |_ |                            | \n"
     help_ += "|                                                                 | \n"
     help_ += "+-----------------------------------------------------------------+ \n"
-    help_ += "|- /users                    : liste des utilisateurs connecté    | \n"
     help_ += "|- /msg <username> <message> : envoyer un message privé           | \n"
     help_ += "|- /users                    : affiche les utilisateurs connecté  | \n"
     help_ += "|- /help                     : afficher ce message                | \n"
-    help_ += "\_________________________________________________________________/  \n"
+    help_ += "\_________________________________________________________________/ \n"
     return help_
     
 
@@ -503,7 +502,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
             try:
                 message = client.receive() 
 
-                print(f"📳 | {client.username},Received message: {message}")
+                print(f"📳 | <{client.username}> {message}")
 
                 if message.startswith("/msg"):
                     tell(message, client)
