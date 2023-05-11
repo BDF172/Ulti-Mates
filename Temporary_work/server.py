@@ -23,6 +23,7 @@ class Client :
         return self.connected
 
     def disconnect(self) :
+        if not self.connected : broadcast(f"has left the chat", self)
         self.connected = False
 
     def id(self) :
@@ -471,7 +472,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
 
         if client.connection_status() :
             print(f"L'utilisateur {client.username()} a réussi sa connexion sur l'adresse IP {client.address()}.")
-            broadcast("👉 | New connection from "+str(client.username()), client)
+            broadcast(f"has joined the chat", client)
             print("broad")
             client.send("Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !")
         

@@ -59,11 +59,13 @@ def send_message(sock) :
     global username
 
     while True :
-        message = str(input('\n'))
-        print("\033[1A\033[2K\r", end="")
+        message = str(input())
         if username == "":
             username = message
-            
+
+        print("\033[1A\033[2K\r", end="")
+        print(f"<{username}> {message}")
+        
         if len(message) >= 1024:
             print("\n> Message trop long !")
             continue
@@ -88,6 +90,7 @@ def receive_message(sock) :
             if not encrypted_message:
                 return None
             message = e2ee.decrypt_message(encrypted_message, client_key)
+            # print("\033[1A\033[2K\r", end="")
             print(message)
         except OSError as e:
             print(f"Une erreur est survenue lors de la dernière réception de message: {e}")
