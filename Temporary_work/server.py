@@ -123,7 +123,10 @@ def broadcast(message:str, client:Client):
     """
     for user in list(clients.keys()):
         if clients[user].username != client.username:
-            clients[user].send((f"<{client.username}> {message}"))
+            if message == "has joined the chat":
+                clients[user].send((f"{client.username} {message}"))
+            else:
+                clients[user].send((f"<{client.username}> {message}"))
     return
 
 
@@ -567,7 +570,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
 
         if client.connection_status() :
             print(f"✅ | L'utilisateur {client.username} a réussi sa connexion sur l'adresse IP {client.adresse}.")
-            broadcast(f"has joined the chat", client)
+            broadcast("has joined the chat", client)
             print("broad")
             client.send("> Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !\n ")
         
