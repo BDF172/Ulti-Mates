@@ -158,7 +158,7 @@ def connect():
             else:
                 print("\n/!\ cryptage de la connexion impossible ! /!\ \n")
                 sock.close()
-                disconnect()
+                disconnect(sock)
                 connected = False
 
             if handshake_done :
@@ -171,6 +171,6 @@ def connect():
         if not connected:
             print("\n/!\ connexion error /!\ \n")
             sock.close()
-            disconnect()
+            disconnect(sock)
 
 connect()
