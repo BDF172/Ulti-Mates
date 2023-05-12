@@ -43,7 +43,7 @@ class Client :
 
 clients = {}
 path_db='/home/freebox/server/users.db'
-path_db = 'Temporary_work\\users.db'
+#path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -362,7 +362,17 @@ def get_friends(client):
     else :
         client.send("> Tu n'es ami avec personne pour le moment.")
 
-
+def get_user_db_id(client,username) :
+    temp_db = sqlite3.connect(path_db)
+    temp_cur=temp_db.cursor()
+    print(f"👉 |checking for {client.username} if {username} exists")
+    temp_cur.execute(f"SELECT id FROM entite WHERE user='{username}';")
+    try :
+        res = temp_cur.fetchall()[0][0]
+        temp_db.close()
+        return res
+    except :
+        return False
 
 def amities_inbox(client,message) :
     if demande_amis(client,message) :
@@ -407,8 +417,9 @@ def who_is_blocked(client) :
         liste_amis = []
         for i in result :
             liste_amis.append(i[0])
-        client.send(",".join(liste_amis))
-        client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
+        for ami in liste_amis :
+            client.send(ami)
+        client.send("> Voulez-vous débloquer quelqu'un (oui/non) ?")
         answer = client.receive()
         if answer == "oui" :
             NotImplemented
@@ -463,6 +474,17 @@ def help():
     # plus grand et ca bug :/
     return help_
 
+def block(client,message) :
+    assert len(message.split(" ")) == 2 , "Le demande de blocage entrée est invalide."
+    message = " ".join(message.split(" ")[1:])
+    res = get_user_db_id(client, message)
+    if res != False :
+        temp_db = sqlite3.connect(path_db)
+        temp_cur = temp_db.cursor()
+        temp_cur.execute(f"INSERT INTO Blocked (blocker,blocked) VALUES ({client.db_id},{res});")
+        temp_db.commit()
+        temp_db.close()
+        client.send(f"Vous avez bien bloqué {message}.")
 
 
 def leave(client) :
@@ -604,8 +626,12 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                         requete_amis(client, " ".join(message.split(" ")[1:]))
                     else :
                         client.send("> La commande que vous avez entré est invalide")
+                elif message.startswith("/block") :
+                    block(client,message)
+
                 elif message.startswith("/who_is_blocked") :
                     who_is_blocked(client)
+
                 elif message.startswith("/") :
                     client.send("> La commande que vous avez entré est invalide")
 
@@ -629,8 +655,8 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    # HOST = '192.168.1.83'
-    HOST = '127.0.0.1' # Pour les tests sur machine locale
+    HOST = '192.168.1.83'
+    #HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
 
     # Créer un socket
