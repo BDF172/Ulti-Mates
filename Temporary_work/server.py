@@ -1,9 +1,8 @@
 import socket, threading, sqlite3, time, hashlib, traceback
-import trace
 import end_to_end_encryption as e2ee
 
 class Client :
-    def __init__(self,conn,adresse,key,user_name) :
+    def __init__(self, conn:socket.socket, adresse:str, key:str, user_name:str)  -> None:
         self.username = user_name
         self.conn = conn
         self.adresse = adresse
@@ -11,35 +10,38 @@ class Client :
         self.connected = True
         self.db_id = self.registered()
 
-    def connection(self) :
+    def connection(self) -> socket:
         return self.conn
 
-    def connection_status(self) :
+    def connection_status(self) -> bool:
         return self.connected
 
-    def disconnect(self) :
+    def disconnect(self) -> None:
         if not self.connected : broadcast(f"has left the chat", self)
         self.connected = False
 
-    def id(self) :
+    def id(self) -> int:
         return self.db_id
 
-    def send(self,message:str) :
+    def send(self,message:str) -> None:
         self.conn.send(e2ee.encrypt_message(message, self.key))
 
-    def receive(self) :
+    def receive(self) -> str:
         return str(e2ee.decrypt_message(self.conn.recv(1024), self.key))
     
 
-    def registered(self) :
+    def registered(self) -> int:
         temp_db = sqlite3.connect(path_db)
         temp_cur = temp_db.cursor()
         temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user = '{self.username}'")
         if temp_cur.fetchall()[0][0]==1 :
             temp_cur.execute(f"SELECT id FROM entite WHERE user = '{self.username}';")
-            return temp_cur.fetchall()[0][0]
-        return False
+            temp_db.close()
+            return int(temp_cur.fetchall()[0][0])
+        
         temp_db.close()
+        return False
+        
 
 clients = {}
 path_db='/home/freebox/server/users.db'
@@ -55,7 +57,7 @@ path_db='/home/freebox/server/users.db'
 commandes = ["/msg", "/users", "/help"]
 users_ip = {}
 
-def load_user_name(username):
+def load_user_name(username:str) -> str:
     """
     Permet de savoir si un nom d'utilisateur est déjà pris
     True = found
@@ -67,11 +69,11 @@ def load_user_name(username):
     temp_cur.execute(f"SELECT COUNT(user) FROM entite WHERE user='{username}';")
     res = temp_cur.fetchall()[0][0] == 1
     temp_db.close()
-    return res
+    return str(res)
 
 
 
-def get_client_obj(username) :
+def get_client_obj(username:str):
     """ 
     -----------
     Description
@@ -131,7 +133,7 @@ def broadcast(message:str, client:Client):
 
 
 
-def first_connection(client,attempts=0) :
+def first_connection(client:Client, attempts=0):
     """
     -----------
     Description
@@ -202,7 +204,7 @@ def first_connection(client,attempts=0) :
 
 
 
-def create_user(client) :
+def create_user(client:Client):
     """
     -----------
     Description
@@ -271,7 +273,7 @@ def create_user(client) :
 
 
 
-def amities(client) :
+def amities(client:Client):
     temp_db=sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
     temp_cur.execute(f'select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = "{client.username}") UNION select user1 as user from Amities where user2 in (select id from entite where user = "{client.username}"));')
@@ -281,7 +283,7 @@ def amities(client) :
 
 
 
-def requete_amis(client,receiver) :
+def requete_amis(client:Client, receiver:str):
     amis = amities(client)
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
@@ -304,12 +306,13 @@ def requete_amis(client,receiver) :
         client.send(f"> Votre demande d'ami envers {receiver} a été envoyée !")
     else :
         client.send(f"> Le nom d'utilisateur {receiver} n'existe pas.")
+        
     temp_db.commit()
     temp_db.close()
 
 
 
-def demande_amis(client,message) :
+def demande_amis(client:Client, message:str):
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
     temp_cur.execute(f"select req_id,user from Req_Amis join entite on Req_Amis.sender = entite.id where receiver = {client.id()};")
@@ -340,7 +343,7 @@ def demande_amis(client,message) :
 
 
 
-def get_friends(client):
+def get_friends(client:Client):
     friends = amities(client)
     print('friends :',friends)
     if friends != [] :
@@ -362,19 +365,23 @@ def get_friends(client):
     else :
         client.send("> Tu n'es ami avec personne pour le moment.")
 
-def get_user_db_id(client,username) :
+
+
+def get_user_db_id(client:Client, username:str):
     temp_db = sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
     print(f"👉 |checking for {client.username} if {username} exists")
     temp_cur.execute(f"SELECT id FROM entite WHERE user='{username}';")
     try :
-        res = temp_cur.fetchall()[0][0]
+        res = int(temp_cur.fetchall()[0][0])
         temp_db.close()
         return res
     except :
         return False
 
-def amities_inbox(client,message) :
+
+
+def amities_inbox(client:Client, message:str):
     if demande_amis(client,message) :
         client.send("> Voulez-vous accepter une demande (oui/non) ?")
         answer = client.receive()
@@ -404,7 +411,7 @@ def amities_inbox(client,message) :
 
 
 
-def who_is_blocked(client) :
+def who_is_blocked(client:Client):
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
     temp_cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
@@ -430,7 +437,7 @@ def who_is_blocked(client) :
 
 
 
-def tell(message, client):
+def tell(client:Client, message:str):
     """
     Envoie un message a un client specifique
     """
@@ -474,7 +481,9 @@ def help():
     # plus grand et ca bug :/
     return help_
 
-def block(client,message) :
+
+
+def block(client:Client, message:str):
     assert len(message.split(" ")) == 2 , "Le demande de blocage entrée est invalide."
     message = " ".join(message.split(" ")[1:])
     res = get_user_db_id(client, message)
@@ -487,7 +496,8 @@ def block(client,message) :
         client.send(f"Vous avez bien bloqué {message}.")
 
 
-def leave(client) :
+
+def leave(client:Client):
     try :
         client.send("> Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
         message=client.receive()
@@ -504,7 +514,7 @@ def leave(client) :
 
 
 
-def online_users() :
+def online_users():
     """
     generate a mesage containing every username
     """
@@ -529,7 +539,7 @@ def online_users() :
     
 
 
-def handshake(message):
+def handshake(message:str):
     """
     when a client to the server, it frst sends a message containing the encryption key that need to be decrypted with the fix_token
     """
@@ -539,7 +549,7 @@ def handshake(message):
 
 
 
-def handle_client(conn, addr, first_time=True, handshaked=False):
+def handle_client(conn:socket.socket, addr:str, first_time=True, handshaked=False):
     """
     Fonction pour gérer les connexions entrantes des clients
     """
@@ -603,7 +613,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                 print(f"📳 | <{client.username}> {message}")
 
                 if message.startswith("/msg"):
-                    tell(message, client)
+                    tell(client, message)
 
                 elif message.startswith("/users"):
                     client.send(online_users())
