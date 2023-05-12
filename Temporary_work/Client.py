@@ -30,7 +30,7 @@ def handshake(socket):
         print(".", end="", flush=True)
         socket.send(encrypted_key)
     except Exception as e:
-        print("\n> Impossible d'effectuer le handshake !")
+        print("\n/!\ Impossible d'effectuer le handshake ! /!\ \n")
         print(traceback.format_exc())
         return False
 
@@ -42,10 +42,10 @@ def handshake(socket):
         if e2ee.decrypt_message(response, e2ee.fix_token) == client_key:
             return True
         else:
-            print("\n> handshake échoué !")
+            print("\n/!\ handshake échoué ! /!\ \n")
             return False
     except Exception as e:
-        print("\n> Impossible d'effectuer le handshake !")
+        print("\n/!\ Impossible d'effectuer le handshake ! /!\ \n")
         print(traceback.format_exc())
         return False
 
@@ -82,7 +82,7 @@ def send_message(sock) :
             try :
                 sock.send(e2ee.encrypt_message(message, client_key))
             except Exception as e:
-                print("\n> Impossible d'envoyer le message !")
+                print("\n/!\ Impossible d'envoyer le message ! /!\ \n")
                 print(traceback.format_exc())
     
 def receive_message(sock) :
@@ -93,26 +93,25 @@ def receive_message(sock) :
     """
     while True :
         try:
-            if sock.fileno() == -1:
-                return False
+            if sock.fileno() == -1: return False
+
             encrypted_message = sock.recv(1024)
             message = e2ee.decrypt_message(encrypted_message, client_key)
             print(message)
         except OSError as e:
-            print(f"Une erreur est survenue lors de la dernière réception de message: {e}")
+            print(f"/!\ Une erreur est survenue lors de la dernière réception de message: {e} /!\ \n")
             sock.close()
-            disconnect()
+            disconnect(sock)
 
 
-def disconnect():
-    print("type '/reconnect' to attemps to reconnect, or '/exit' to quite")
+def disconnect(socket):
+    print("> type '/reconnect' to attemps to reconnect, or '/exit' to quite")
     reco = str(input('> '))
     if reco == "/reconnect":
+        socket.close()
         connect()
-    elif reco == '/exit':
-        exit()
-    else:
-        print("commande inconnu")
+    elif reco == '/exit': exit()
+    else: print("> commande inconnu")
 
 
 
@@ -128,10 +127,10 @@ def connect():
         # port = int(input("Port du serveur : "))
 
         host="91.173.148.254"
-        #host="127.0.0.1"
+        host="127.0.0.1"
 
         port = 24444
-        #port = 4444
+        port = 4444
 
         print("\n> connexion au serveur", end="")
         try:
@@ -142,33 +141,36 @@ def connect():
             sock.connect((host,port))
             
             print(".", end="", flush=True)
+            connected = True
         except:
-            print("\n> Impossible de se connecter au serveur !\n Vérifiez que le serveur est bien en ligne et que vous avez entré la bonne adresse IP et le bon port !\n ")
-            connected = False
+            print('\n')
+            print("\n/!\ Impossible de se connecter au serveur ! /!\  \n  |-> Vérifiez que le serveur est bien en ligne et que vous avez entré la bonne adresse IP et le bon port !\n ")
+    
+        if connected:
 
-        send_thread = threading.Thread(target=send_message, args=(sock,))
-        receive_thread = threading.Thread(target=receive_message, args=(sock,))
+            send_thread = threading.Thread(target=send_message, args=(sock,))
+            receive_thread = threading.Thread(target=receive_message, args=(sock,))
 
-        handshake_done = handshake(sock)
+            handshake_done = handshake(sock)
 
-        if handshake_done:
-            print("\n> handshake réussi !")
-        else:
-            print("\n> cryptage de la connexion impossible !")
+            if handshake_done:
+                print("\n> handshake réussi !\n")
+            else:
+                print("\n/!\ cryptage de la connexion impossible ! /!\ \n")
+                sock.close()
+                disconnect()
+                connected = False
+
+            if handshake_done :
+                print("\n> cryptage de la connexion établie !\nVous pouvez commencer à envoyer des messages en toute sécurité !\n--Début de l'authentification--\n")
+                connected = True
+
+            send_thread.start()
+            receive_thread.start()
+
+        if not connected:
+            print("\n/!\ connexion error /!\ \n")
             sock.close()
             disconnect()
-            connected = False
-
-        if handshake_done :
-            print("\n> cryptage de la connexion établie !\nVous pouvez commencer à envoyer des messages en toute sécurité !\n--Début de l'authentification--\n")
-            connected = True
-
-        send_thread.start()
-        receive_thread.start()
-
-    if not connected:
-        print("connexion error")
-        sock.close()
-        disconnect()
 
 connect()

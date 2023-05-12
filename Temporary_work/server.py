@@ -1,4 +1,5 @@
-import socket, threading, sqlite3, time, hashlib
+import socket, threading, sqlite3, time, hashlib, traceback
+import trace
 import end_to_end_encryption as e2ee
 
 class Client :
@@ -42,7 +43,7 @@ class Client :
 
 clients = {}
 path_db='/home/freebox/server/users.db'
-#path_db = 'Temporary_work\\users.db'
+path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -67,6 +68,8 @@ def load_user_name(username):
     res = temp_cur.fetchall()[0][0] == 1
     temp_db.close()
     return res
+
+
 
 def get_client_obj(username) :
     """ 
@@ -96,6 +99,8 @@ def get_client_obj(username) :
             return client
     return False
 
+
+
 def broadcast(message:str, client:Client):
     """
     -----------
@@ -121,6 +126,8 @@ def broadcast(message:str, client:Client):
             clients[user].send((f"<{client.username}> {message}"))
     return
 
+
+
 def first_connection(client,attempts=0) :
     """
     -----------
@@ -143,7 +150,7 @@ def first_connection(client,attempts=0) :
     """
     try :
         if attempts == 2:
-            client.send("Vous avez fait trop d'erreurs, vous allez être déconnecté(e).")
+            client.send("> Vous avez fait trop d'erreurs, vous allez être déconnecté(e).")
             return False
         
         temp_db=sqlite3.connect(path_db)
@@ -153,23 +160,20 @@ def first_connection(client,attempts=0) :
             
             print(f"👉 | {client.username} is trying to connect")
 
-            client.send("Quel est votre mot de passe ?")
-            password = hashlib.sha1(client.receive().encode()).hexdigest()
+            client.send("> Quel est votre mot de passe ?")
             
-            print(password)
-
-            temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username}' AND password='{password}';")
+            temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user='{client.username}' AND password='{hashlib.sha1(client.receive().encode()).hexdigest()}';")
             if temp_cur.fetchall()[0][0]==1 :
 
                 print(f"👉 | {client.username} is connected")
 
-                client.send("Vous êtes connecté(e) !")
+                client.send("> Vous êtes connecté(e) !")
                 temp_db.close()
                 return True
             else :
                 print(f"👉 | {client.username} failed to connect (too many failed attempts))")
 
-                client.send(f"Vous avez {attempts+1} mauvaise(s) tentative(s), veuillez recommencer")
+                client.send(f"> Vous avez {attempts+1} mauvaise(s) tentative(s), veuillez recommencer")
                 temp_db.close()
                 return first_connection(client, attempts+1)
 
@@ -180,7 +184,7 @@ def first_connection(client,attempts=0) :
             if etapes_creation_compte == True : # La fonction nous renverra True si le compte est créé avec succès.
                 print(f"✅ | {client.username} created an account")
 
-                client.send("Votre compte a été créé ! \nVous allez être déconnecté, veuillez vous reconnecter.")
+                client.send("> Votre compte a été créé ! \nVous allez être déconnecté, veuillez vous reconnecter.")
                 client.disconnect()
                 return True
             elif etapes_creation_compte == "#USER_INPUT_MISTAKE#" :
@@ -192,6 +196,8 @@ def first_connection(client,attempts=0) :
                 return False
     except :
         return False
+
+
 
 def create_user(client) :
     """
@@ -213,12 +219,12 @@ def create_user(client) :
         bool : vient vérifier que la création de compte est un succès.
 
     """
-    client.send("Le nom/pseudonyme entré n'est pas enregistré chez nous, voulez-vous créer un compte (oui/non) ?")
+    client.send("> Le nom/pseudonyme entré n'est pas enregistré chez nous, voulez-vous créer un compte (oui/non) ?")
     answer = client.receive()
     if answer == "non" :
         return "#USER_INPUT_MISTAKE#"
     elif answer != "oui" :
-        client.send("La commande que vous avez entré n'est pas valide. \n")
+        client.send("> La commande que vous avez entré n'est pas valide. \n")
         return create_user(client)
     else :
         count = 0
@@ -226,13 +232,14 @@ def create_user(client) :
             try :
                 print(f"👉 |{client.username} is creating an account")
 
-                client.send(("Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :"))
+                client.send(("> Vous n'existez pas dans notre base de données, entrez le mot de passe souhaité :"))
                 psw = hashlib.sha1(client.receive().encode()).hexdigest()
-                client.send(("Confirmez votre saisie :"))
+                client.send(("> Confirmez votre saisie :"))
                 confirmation = hashlib.sha1(client.receive().encode()).hexdigest()
                 if(count>=2) :
                     print(f"❌ | {client.username} failed to create an account (too many failed attempts)")
-                    client.send(("Vous avez essayé 3 fois, veuillez recommencer plus tard."))
+                    client.send(("> Vous avez essayé 3 fois, veuillez recommencer plus tard."))
+                    psw, confirmation = None, None
                     return False
 
                 elif psw == confirmation and count < 3 :
@@ -243,18 +250,22 @@ def create_user(client) :
                         temp_db.commit()
                         print(f"✅ | L'utilisateur {client.username} vient d'être ajouté à la base de données.")
                         temp_db.close()
+                        psw, confirmation = None, None
                         return True
                     except :
                         print(f"❌ | Un problème est survenu lors de la création du compte pour l'utilisateur {client.username}")
+                        psw, confirmation = None, None
                         return False
             
                 else :
-                    print(f"❌ | ")
-                    message = "Vos mots de passes ne correspondent pas, veuillez recommencer."
+                    print(f"❌ | mots de passe de {client.username} ne correspondent pas")
                     count+=1
-                    client.send(message)
+                    psw, confirmation = None, None
+                    client.send("> Vos mots de passe ne correspondent pas, veuillez recommencer.")
             except :
+                psw, confirmation = None, None
                 return False
+
 
 
 def amities(client) :
@@ -265,6 +276,8 @@ def amities(client) :
     temp_db.close()
     return res
 
+
+
 def requete_amis(client,receiver) :
     amis = amities(client)
     temp_db = sqlite3.connect(path_db)
@@ -274,52 +287,86 @@ def requete_amis(client,receiver) :
     print(amis_en_attente)
     for demande in amis_en_attente :
          if receiver == demande[0] :
-            client.send(f"Vous avez déjà demandé {receiver} en ami(e).")
+            client.send(f"> Vous avez déjà demandé {receiver} en ami(e).")
             temp_db.close()
             return None
     if amis != [] :
         if receiver in amities(client)[0] :
-            client.send(f"Vous êtes déjà ami avec {receiver}")
+            client.send(f"> Vous êtes déjà ami avec {receiver}")
     elif load_user_name(receiver) != False :
         temp_cur.execute(f"select id from entite where user = '{receiver}';")
         receiver_database_id = str(temp_cur.fetchall()[0][0])
         print(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
         temp_cur.execute(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
-        client.send(f"Votre demande d'ami envers {receiver} a été envoyée !")
+        client.send(f"> Votre demande d'ami envers {receiver} a été envoyée !")
     else :
-        client.send(f"Le nom d'utilisateur {receiver} n'existe pas.")
+        client.send(f"> Le nom d'utilisateur {receiver} n'existe pas.")
     temp_db.commit()
     temp_db.close()
+
+
 
 def demande_amis(client,message) :
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
     temp_cur.execute(f"select req_id,user from Req_Amis join entite on Req_Amis.sender = entite.id where receiver = {client.id()};")
     ans = temp_cur.fetchall()
-    if ans != [] :
+    temp_db.close()
+
+    if len(ans) != 0 :
+
+        amis = ""
         for i in range(len(ans)) :
-            ans[i] = (str(ans[i][0]),ans[i][1] + "\n")
-        print(ans)
-        temp_db.close()
-        res = []
-        for element in ans :
-            res.append(element)
-        client.send((f"Ces personnes vous ont demandé(e) en ami(e) : \n"))
-        client.send("<Identifiant demande d'ami> | <Personne à l'origine de la demande>\n")
-        client.send("\n------------------------------------------------------------------\n")
-        for i in res :
-            client.send(str((" | ".join(i)), '\n'))
-            return True # Pour indiquer que le client a des demandes d'amis
+            amis += f" |- <{str(ans[i][0])}> {str(ans[i][1])}{' '*(58 - len(str(ans[i][0])) - len(str(ans[i][1])))}|\n"
+
+        print('amis : ',amis)
+
+
+        message_ami  = "  _______________________________________________________________  \n"
+        message_ami += " /                                                               \ \n"
+        message_ami += " | Ces personnes vous ont demandé(e) en ami(e) <ID> <username> : | \n" if len(ans) > 1 else " | Cette personne vous à demandé(e) en ami(e) : |\n"
+        message_ami += amis
+        message_ami += " \_______________________________________________________________/\n"
+        
+        client.send(message_ami)
+
+        return True # Pour indiquer que le client a des demandes d'amis
     else :
-        client.send("Vous n'avez aucune nouvelle demande d'amis.")
+        client.send("> Vous n'avez aucune nouvelle demande d'amis.")
         return False # Pour indiquer que le client n'a aucune demande d'amis
-    
+
+
+
+def get_friends(client):
+    friends = amities(client)
+    print('friends :',friends)
+    if friends != [] :
+
+        friend = ""
+        for result in friends :
+            friend += f" |- {str(result[0])} {' '*30 - len(str(result[0]))}| \n"
+
+        print('friend :',friend)
+
+        friends_ ="\n  ________________________________\n"
+        friends_ += " /                                \ \n"
+        friends_ += " | Vos amis :                     |\n"
+        friends_ += friend
+        friends_ += " \________________________________/\n"
+
+        client.send(friends_)
+        
+    else :
+        client.send("> Tu n'es ami avec personne pour le moment.")
+
+
+
 def amities_inbox(client,message) :
     if demande_amis(client,message) :
-        client.send("Voulez-vous accepter une demande (oui/non) ?")
+        client.send("> Voulez-vous accepter une demande (oui/non) ?")
         answer = client.receive()
         if answer == "oui" :
-            client.send("Quelle est l'identifiant de la demande à accepter ?")
+            client.send("> Quelle est l'identifiant de la demande à accepter ?")
             id = client.receive()
             temp_db = sqlite3.connect(path_db)
             temp_cur = temp_db.cursor()
@@ -331,13 +378,18 @@ def amities_inbox(client,message) :
                 temp_cur.execute(f"delete from Req_Amis where req_id = {id};")
                 temp_db.commit()
                 temp_db.close()
+                client.send("> Demande acceptée !")
             else :
-                client.send("Aucune demande trouvée pour cet identifiant.")
+                client.send("> Aucune demande trouvée pour cet identifiant.\n")
                 temp_db.close()
         elif answer == "non" :
-            client.send("D'accord, retour aux messages !")
-            temp_db.close()
+            client.send("> D'accord, retour aux messages !\n")
             return None
+        else :
+            client.send("> Je n'ai pas compris votre réponse.\n> Retour aux messages !\n")
+            return None
+
+
 
 def who_is_blocked(client) :
     temp_db = sqlite3.connect(path_db)
@@ -346,77 +398,85 @@ def who_is_blocked(client) :
     result = temp_cur.fetchall()
     temp_db.close()
     if result == []: 
-        client.send("Vous n'avez bloqué personne.")
+        client.send("> Vous n'avez bloqué personne.")
     else :
-        client.send("Vous avez bloqué les personnes suivantes : \n")
+        client.send("> Vous avez bloqué les personnes suivantes : \n")
         liste_amis = []
         for i in result :
             liste_amis.append(i[0])
         client.send(",".join(liste_amis))
-        client.send("Voulez-vous débloquer quelqu'un (oui/non) ?")
+        client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
         answer = client.receive()
         if answer == "oui" :
             NotImplemented
         elif answer == "non" :
-            client.send("D'accord, retour aux messages !")
+            client.send("> D'accord, retour aux messages !")
         else :
-            client.send("")
+            client.send("> Je n'ai pas compris votre réponse.\n> Retour aux messages !")
+
+
 
 def tell(message, client):
     """
     Envoie un message a un client specifique
     """
+    message = message + " "
     message = message.replace("/msg","").split(" ")
     receiver_username = message[1]
     try:
         receiver = clients[receiver_username]
     except KeyError:
         receiver = None
+
     message = " ".join(message[2:])
 
     if type(receiver) == type(client):
         receiver.send(f"<{str(client.username)} -> me> {message}")
         client.send(f"<me -> {str(receiver.username)}> {message}")
     else:
-        client.send(f"{receiver_username} does not exist or is not connected.")
+        client.send(f"> {receiver_username} does not exist or is not connected.\n")
+
+
 
 def help():
 
     """
     ascii art of 'help' HELP
     """
-    help_ ="\n _________________________________________________________________  \n"
-    help_ += "/                               _     _                           \ \n"
-    help_ += "|                          |_| |_ |  |_)                          | \n"
-    help_ += "|                          | | |_ |_ |                            | \n"
-    help_ += "|                                                                 | \n"
-    help_ += "+-----------------------------------------------------------------+ \n"
-    help_ += "|- /msg <username> <message> : envoyer un message privé           | \n"
-    help_ += "|- /users                    : afficher les utilisateurs connecté | \n"
-    help_ += "|- /friends                  : afficher la liste de vos amis      | \n"
-    help_ += "|- /friend_requests          : afficher les demandes d'amis       | \n"
-    help_ += "|- /befriend <username>      : faire une demande d'ami            | \n"
-    help_ += "|- /who_is_blocked           : afficher les personnes bloquées    | \n"
-    help_ += "|- /help                     : afficher ce message                | \n"
-    help_ += "|- /exit                     : quitter le programme               | \n"
-    help_ += "\_________________________________________________________________/ \n"
+    help_ ="\n  _________________________________________________________________  \n"
+    help_ += " /                               _     _                           \ \n"
+    help_ += " |                          |_| |_ |  |_)                          | \n"
+    help_ += " |                          | | |_ |_ |                            | \n"
+    help_ += " +-----------------------------------------------------------------+ \n"
+    help_ += " |- /msg <username> <message> : envoyer un message privé           | \n"
+    help_ += " |- /users                    : afficher les utilisateurs connecté | \n"
+    help_ += " |- /friends                  : afficher la liste de vos amis      | \n"
+    help_ += " |- /friend_requests          : afficher les demandes d'amis       | \n"
+    help_ += " |- /befriend <username>      : faire une demande d'ami            | \n"
+    help_ += " |- /who_is_blocked           : afficher les personnes bloquées    | \n"
+    help_ += " |- /help                     : afficher ce message                | \n"
+    help_ += " |- /exit                     : quitter le programme               | \n"
+    help_ += " \_________________________________________________________________/ \n"
+    # plus grand et ca bug :/
     return help_
-    
+
+
 
 def leave(client) :
     try :
-        client.send("Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
+        client.send("> Vous êtes sur le point de vous déconnecter, en êtes-vous sûr (oui/non) ?")
         message=client.receive()
         if message not in ["oui","non"] :
-            client.send("Nous n'avons pas compris votre requête.")
+            client.send("> Nous n'avons pas compris votre requête.")
             return leave(client)
         elif message == "oui" :
-            client.send("Vous allez être déconnecté")
+            client.send("> Vous allez être déconnecté")
             return True
         else :
             return False
     except :
         return False
+
 
 
 def online_users() :
@@ -427,11 +487,18 @@ def online_users() :
     for user in list(clients.keys()):
         users_line += f"|- {user}{' '*(36 - len(user))}|\n"
 
-    line ="\n ______________________________________\n"
-    line += "/                                      \ \n"
-    line += "| Utilisateurs actuellement en ligne : |\n"
-    line += users_line
-    line += "\______________________________________/\n"
+    line ="\n  ______________________________________\n"
+    line += " /                                      \ \n"
+
+    if len(list(clients.keys())) == 1:
+        line += " | Utilisateur actuellement en ligne :  |\n"
+    elif len(list(clients.keys())) > 1:
+        line += " | Utilisateurs actuellement en ligne : |\n"
+    else:
+        line += " | Aucun utilisateur en ligne.          |\n"
+
+    line += " " + users_line
+    line += " \______________________________________/\n"
 
     return line
     
@@ -444,6 +511,7 @@ def handshake(message):
     decrypted_message = e2ee.decrypt_message(message, e2ee.fix_token)
 
     return (True, decrypted_message) if len(decrypted_message) == 128 else (False, '')
+
 
 
 def handle_client(conn, addr, first_time=True, handshaked=False):
@@ -501,7 +569,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
             print(f"✅ | L'utilisateur {client.username} a réussi sa connexion sur l'adresse IP {client.adresse}.")
             broadcast(f"has joined the chat", client)
             print("broad")
-            client.send("Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !\n ")
+            client.send("> Si vous ne connaissez pas les commandes habituelles, entrez '/help' pour les voir !\n ")
         
         while client.connection_status():
             try:
@@ -523,14 +591,7 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                         client.disconnect()
 
                 elif message == "/friends" :
-                    friends = amities(client)
-                    if friends != [] :
-                        client.send("Tes amis sont : \n ")
-                        for result in friends :
-                            print(result)
-                            client.send(f"{result[0]} \n")
-                    else :
-                        client.send("Tu n'es ami avec personne pour le moment.")
+                    get_friends(client)
 
                 elif message.startswith("/friend_requests") :
                     amities_inbox(client, message)
@@ -539,16 +600,17 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                     if len(message.split(" ")) > 1 :
                         requete_amis(client, " ".join(message.split(" ")[1:]))
                     else :
-                        client.send("La commande que vous avez entré est invalide")
+                        client.send("> La commande que vous avez entré est invalide")
                 elif message.startswith("/who_is_blocked") :
                     who_is_blocked(client)
                 elif message.startswith("/") :
-                    client.send("La commande que vous avez entré est invalide")
+                    client.send("> La commande que vous avez entré est invalide")
 
                 else:
                     broadcast(message, client)
             except:
                 client.disconnect()
+                print(traceback.format_exc())
         del clients[user]
         client.disconnect()
         print(f"📴 | Connection closed to {client.adresse}")
@@ -558,13 +620,14 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
         print(f"📴 | Connection closed to {client.adresse}")
 
 
+
 def start_server():
     """
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    HOST = '192.168.1.83'
-    # HOST = '127.0.0.1' # Pour les tests sur machine locale
+    # HOST = '192.168.1.83'
+    HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
 
     # Créer un socket
@@ -586,5 +649,7 @@ def start_server():
 
         # Afficher le nombre de threads actifs
         print(f"👉 | [ACTIF] {threading.activeCount() - 1} connexions actives.")
+
+
 
 start_server()
