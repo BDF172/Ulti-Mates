@@ -24,24 +24,33 @@ class Client :
         return self.db_id
 
     def send(self,message:str) -> None:
-        self.conn.send(e2ee.encrypt_message(message, self.key))
+        self.conn.send(e2ee.encrypt_message(str(message), self.key))
+        time.sleep(0.05)
 
     def receive(self) -> str:
         return str(e2ee.decrypt_message(self.conn.recv(1024), self.key))
     
-
     def registered(self) -> int:
         temp_db = sqlite3.connect(path_db)
         temp_cur = temp_db.cursor()
         temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user = '{self.username}'")
         if temp_cur.fetchall()[0][0]==1 :
             temp_cur.execute(f"SELECT id FROM entite WHERE user = '{self.username}';")
+            res = int(temp_cur.fetchall()[0][0])
             temp_db.close()
-            return int(temp_cur.fetchall()[0][0])
-        
+            return int(res)
         temp_db.close()
         return False
-        
+
+    def ouinon(self) :
+        reponse = self.receive()
+        if reponse == "oui" :
+            return True
+        elif reponse == "non" :
+            return False
+        else :
+            self.send("La réponse entrée n'est pas valide, veuillez recommencer (oui/non) :")
+            return self.ouinon()
 
 clients = {}
 path_db='/home/freebox/server/users.db'
@@ -69,7 +78,7 @@ def load_user_name(username:str) -> str:
     temp_cur.execute(f"SELECT COUNT(user) FROM entite WHERE user='{username}';")
     res = temp_cur.fetchall()[0][0] == 1
     temp_db.close()
-    return str(res)
+    return res
 
 
 
@@ -411,29 +420,55 @@ def amities_inbox(client:Client, message:str):
 
 
 
-def who_is_blocked(client:Client):
+def who_is_blocked(client:Client,comeback:bool = False):
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
     temp_cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
     result = temp_cur.fetchall()
     temp_db.close()
-    if result == []: 
-        client.send("> Vous n'avez bloqué personne.")
+    if comeback and result == []:
+        conn.send("> Plus personne n'est bloqué, retour aux messages.")
+    elif comeback :
+        client.send("> Voulez-vous débloquer d'autres personnes ?")
+        if client.ouinon() :
+            unblock(client, liste_bloques)
+        else : 
+            client.send("> D'accord, retour aux messages.")
     else :
-        client.send("> Vous avez bloqué les personnes suivantes : \n")
-        liste_amis = []
-        for i in result :
-            liste_amis.append(i[0])
-        for ami in liste_amis :
-            client.send(ami)
-        client.send("> Voulez-vous débloquer quelqu'un (oui/non) ?")
-        answer = client.receive()
-        if answer == "oui" :
-            NotImplemented
-        elif answer == "non" :
-            client.send("> D'accord, retour aux messages !")
+        if result == []: 
+            client.send("> Vous n'avez bloqué personne.")
         else :
-            client.send("> Je n'ai pas compris votre réponse.\n> Retour aux messages !")
+            client.send("> Vous avez bloqué les personnes suivantes : \n")
+            liste_bloques = []
+            for i in result :
+                liste_bloques.append(i[0])
+                client.send(i[0])
+            client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
+            reponse = client.ouinon()
+            if reponse :
+                unblock(client,liste_bloques)
+            else :
+                client.send("> D'accord, retour aux messages !")
+
+def unblock(client:Client, liste_bloques:list = []) :
+    temp_db = sqlite3.connect(path_db)
+    temp_cur = temp_db.cursor()
+    client.send("\nQui voulez-vous débloquer ?")
+    if liste_bloques == [] :
+        temp_cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
+        for i in temp_cur.fetchall() :
+                liste_bloques.append(i[0])
+    unblocked = client.receive()
+    if unblocked in liste_bloques :
+        temp_cur.execute(f"delete from Blocked where block_id in (select block_id from Blocked where blocked={get_user_db_id(client,unblocked)} and blocker = {client.db_id});")
+        temp_db.commit()
+        client.send(f"L'utilisateur {unblocked} a été débloqué.")
+        print(f"✅ | L'utilisateur {client.username} a débloqué {unblocked}")
+    elif load_user_name(unblocked) == True :
+        client.send(f"L'utilisateur {unblocked} n'est pas bloqué.")
+    else :
+        client.send(f"L'utilisateur {unblocked} n'existe pas.")
+    temp_db.close()
 
 
 
@@ -485,15 +520,20 @@ def help():
 
 def block(client:Client, message:str):
     assert len(message.split(" ")) == 2 , "Le demande de blocage entrée est invalide."
+    temp_db = sqlite3.connect(path_db)
+    temp_cur = temp_db.cursor()
     message = " ".join(message.split(" ")[1:])
     res = get_user_db_id(client, message)
     if res != False :
-        temp_db = sqlite3.connect(path_db)
-        temp_cur = temp_db.cursor()
-        temp_cur.execute(f"INSERT INTO Blocked (blocker,blocked) VALUES ({client.db_id},{res});")
-        temp_db.commit()
-        temp_db.close()
-        client.send(f"Vous avez bien bloqué {message}.")
+        temp_cur.execute(f"SELECT COUNT(*) FROM Blocked WHERE Blocker={client.db_id} AND Blocked={res}")
+        request = temp_cur.fetchall()[0][0]==1
+        if request :
+            client.send(f"Vous avez déjà bloqué {message}")
+        else :
+            temp_cur.execute(f"INSERT INTO Blocked (blocker,blocked) VALUES ({client.db_id},{res});")
+            temp_db.commit()
+            temp_db.close()
+            client.send(f"Vous avez bien bloqué {message}.")
 
 
 
@@ -641,6 +681,9 @@ def handle_client(conn:socket.socket, addr:str, first_time=True, handshaked=Fals
 
                 elif message.startswith("/who_is_blocked") :
                     who_is_blocked(client)
+
+                elif message.startswith("/unblock") :
+                    unblock(client)
 
                 elif message.startswith("/") :
                     client.send("> La commande que vous avez entré est invalide")
