@@ -80,8 +80,6 @@ def load_user_name(username:str) -> str:
     temp_db.close()
     return res
 
-
-
 def get_client_obj(username:str):
     """ 
     -----------
@@ -110,8 +108,6 @@ def get_client_obj(username:str):
             return client
     return False
 
-
-
 def broadcast(message:str, client:Client):
     """
     -----------
@@ -139,8 +135,6 @@ def broadcast(message:str, client:Client):
             else:
                 clients[user].send((f"<{client.username}> {message}"))
     return
-
-
 
 def first_connection(client:Client, attempts=0):
     """
@@ -211,8 +205,6 @@ def first_connection(client:Client, attempts=0):
     except :
         return False
 
-
-
 def create_user(client:Client):
     """
     -----------
@@ -280,8 +272,6 @@ def create_user(client:Client):
                 psw, confirmation = None, None
                 return False
 
-
-
 def amities(client:Client):
     temp_db=sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
@@ -289,8 +279,6 @@ def amities(client:Client):
     res = temp_cur.fetchall()
     temp_db.close()
     return res
-
-
 
 def requete_amis(client:Client, receiver:str):
     amis = amities(client)
@@ -318,8 +306,6 @@ def requete_amis(client:Client, receiver:str):
         
     temp_db.commit()
     temp_db.close()
-
-
 
 def demande_amis(client:Client, message:str):
     temp_db = sqlite3.connect(path_db)
@@ -350,8 +336,6 @@ def demande_amis(client:Client, message:str):
         client.send("> Vous n'avez aucune nouvelle demande d'amis.")
         return False # Pour indiquer que le client n'a aucune demande d'amis
 
-
-
 def get_friends(client:Client):
     friends = amities(client)
     print('friends :',friends)
@@ -374,8 +358,6 @@ def get_friends(client:Client):
     else :
         client.send("> Tu n'es ami avec personne pour le moment.")
 
-
-
 def get_user_db_id(client:Client, username:str):
     temp_db = sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
@@ -387,8 +369,6 @@ def get_user_db_id(client:Client, username:str):
         return res
     except :
         return False
-
-
 
 def amities_inbox(client:Client, message:str):
     if demande_amis(client,message) :
@@ -418,8 +398,6 @@ def amities_inbox(client:Client, message:str):
             client.send("> Je n'ai pas compris votre réponse.\n> Retour aux messages !\n")
             return None
 
-
-
 def who_is_blocked(client:Client,comeback:bool = False):
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
@@ -431,7 +409,8 @@ def who_is_blocked(client:Client,comeback:bool = False):
     elif comeback :
         client.send("> Voulez-vous débloquer d'autres personnes ?")
         if client.ouinon() :
-            unblock(client, liste_bloques)
+            reponse = "/unblock "+client.receive()
+            unblock(client,reponse,liste_bloques)
         else : 
             client.send("> D'accord, retour aux messages.")
     else :
@@ -446,19 +425,29 @@ def who_is_blocked(client:Client,comeback:bool = False):
             client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
             reponse = client.ouinon()
             if reponse :
-                unblock(client,liste_bloques)
+                client.send("\n> Qui voulez-vous débloquer ?")
+                reponse = "/unblock "+client.receive()
+                unblock(client,reponse,liste_bloques)
             else :
                 client.send("> D'accord, retour aux messages !")
 
-def unblock(client:Client, liste_bloques:list = []) :
+def unblock(client:Client, message, liste_bloques:list = []) :
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
-    client.send("\nQui voulez-vous débloquer ?")
     if liste_bloques == [] :
         temp_cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
         for i in temp_cur.fetchall() :
                 liste_bloques.append(i[0])
-    unblocked = client.receive()
+    if len(message.split(" "))==1 :
+        client.send("Vous devez préciser un utilisateur à bloquer")
+        temp_db.close()
+        return None
+    elif len(message.split(" ")) > 2 :
+        client.send("Vous ne pouvez pas selectionner plusieurs utilisateurs")
+        temp_db.close()
+        return None
+    else :
+        unblocked = message.split(" ")[1]
     if unblocked in liste_bloques :
         temp_cur.execute(f"delete from Blocked where block_id in (select block_id from Blocked where blocked={get_user_db_id(client,unblocked)} and blocker = {client.db_id});")
         temp_db.commit()
@@ -495,7 +484,6 @@ def tell(client:Client, message:str):
 
 
 def help():
-
     """
     ascii art of 'help' HELP
     """
@@ -683,7 +671,7 @@ def handle_client(conn:socket.socket, addr:str, first_time=True, handshaked=Fals
                     who_is_blocked(client)
 
                 elif message.startswith("/unblock") :
-                    unblock(client)
+                    unblock(client,message)
 
                 elif message.startswith("/") :
                     client.send("> La commande que vous avez entré est invalide")
