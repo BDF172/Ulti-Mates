@@ -26,6 +26,7 @@ class Client :
 
     def send(self,message:str) :
         self.conn.send(e2ee.encrypt_message(message, self.key))
+        time.sleep(0.05)
 
     def receive(self) :
         return str(e2ee.decrypt_message(self.conn.recv(1024), self.key))
@@ -41,9 +42,19 @@ class Client :
         return False
         temp_db.close()
 
+    def ouinon(self) :
+        answer = self.receive()
+        if answer == "oui" :
+            return True
+        elif answer == "non" :
+            return False
+        else :
+            self.send("Votre réponse n'est pas valide, entrez oui ou non :")
+            return self.ouinon()
+
 clients = {}
 path_db='/home/freebox/server/users.db'
-path_db = 'Temporary_work\\users.db'
+# path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -277,6 +288,8 @@ def amities(client) :
     temp_cur.execute(f'select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = "{client.username}") UNION select user1 as user from Amities where user2 in (select id from entite where user = "{client.username}"));')
     res = temp_cur.fetchall()
     temp_db.close()
+    for i in range(len(res)) :
+        res[i] = res[i][0]
     return res
 
 
@@ -338,27 +351,26 @@ def demande_amis(client,message) :
         client.send("> Vous n'avez aucune nouvelle demande d'amis.")
         return False # Pour indiquer que le client n'a aucune demande d'amis
 
-
+def get_user_db_id(username) :
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    cur.execute(f"SELECT * FROM entite WHERE user = '{username}';")
+    result = cur.fetchall()
+    db.close()
+    if len(result) == 1 :
+        return result[0][0]
+    else :
+        return []
 
 def get_friends(client):
     friends = amities(client)
-    print('friends :',friends)
     if friends != [] :
-
-        friend = ""
-        for result in friends :
-            friend += f" |- {str(result[0])} {' '*30 - len(str(result[0]))}| \n"
-
-        print('friend :',friend)
-
-        friends_ ="\n  ________________________________\n"
-        friends_ += " /                                \ \n"
-        friends_ += " | Vos amis :                     |\n"
-        friends_ += friend
-        friends_ += " \________________________________/\n"
-
-        client.send(friends_)
-        
+        if len(friends) == 1 :
+            client.send("> Tu as un ami :")
+        else : 
+            client.send("> Tes amis sont :")
+        for friend in friends :
+            client.send(f"    -  {friend}")
     else :
         client.send("> Tu n'es ami avec personne pour le moment.")
 
@@ -394,29 +406,64 @@ def amities_inbox(client,message) :
 
 
 
-def who_is_blocked(client) :
-    temp_db = sqlite3.connect(path_db)
-    temp_cur = temp_db.cursor()
-    temp_cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
-    result = temp_cur.fetchall()
-    temp_db.close()
-    if result == []: 
-        client.send("> Vous n'avez bloqué personne.")
-    else :
-        client.send("> Vous avez bloqué les personnes suivantes : \n")
-        liste_amis = []
-        for i in result :
-            liste_amis.append(i[0])
-        client.send(",".join(liste_amis))
-        client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
-        answer = client.receive()
-        if answer == "oui" :
-            NotImplemented
-        elif answer == "non" :
-            client.send("> D'accord, retour aux messages !")
+def who_is_blocked(client, comeback:bool=False) :
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
+    result = cur.fetchall()
+    if not comeback :
+        if result == []: 
+            client.send("> Vous n'avez bloqué personne.")
+            return None
         else :
-            client.send("> Je n'ai pas compris votre réponse.\n> Retour aux messages !")
+            client.send("> Vous avez bloqué les personnes suivantes : \n")
+            liste_amis = []
+            for i in result :
+                liste_amis.append(i[0])
+            client.send(",".join(liste_amis))
+    client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
+    answer = client.receive()
+    if answer == "oui" :
+        client.send("Qui voulez-vous débloquer ?")
+        username_to_unblock = client.receive()
+        if not load_user_name(username_to_unblock) :
+            client.send("Le nom d'utilisateur entré n'existe pas.")
+        else :
+            cur.execute(f"SELECT block_id FROM Blocked JOIN entite ON Blocked.blocked = entite.ID WHERE Blocker={client.db_id} AND user='{username_to_unblock}';")
+            result = cur.fetchall()
+            if result != [] :
+                client.send(f"Voulez-vous vraiment débloquer {username_to_unblock} ?")
+                if client.ouinon() :
+                    cur.execute(f"DELETE FROM Blocked WHERE block_id = {result[0][0]}")
+                    db.commit()
+            else :
+                client.send(f"Vous n'avez pas bloqué {username_to_unblock}")
+        db.close()
+    elif answer == "non" :
+        client.send("> D'accord, retour aux messages !")
+        db.close()
+    else :
+        client.send("> Je n'ai pas compris votre réponse.\n")
+        db.close()
+        who_is_blocked(client,True)
 
+def block(client, message) :
+    if len(message.split(" ")) == 2:
+        blocked = message.split(" ")[1]
+        blocked_db_id = get_user_db_id(blocked)
+        if blocked_db_id == [] :
+            client.send(f"L'utilisateur {blocked} n'a pas été trouvé.")
+            return None
+    else :
+        client.send("Vous devez entrer un nom d'utilisateur valide.")
+        return None
+
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    cur.execute(f"INSERT INTO Blocked (blocker,blocked) values ({client.db_id},{blocked_db_id});")
+    db.commit()
+    db.close()
+    client.send(f"Vous avez bien bloqué {blocked}")
 
 
 def msg(message, client):
@@ -579,35 +626,37 @@ def handle_client(conn, addr, first_time=True, handshaked=False):
                 message = client.receive() 
 
                 print(f"📳 | <{client.username}> {message}")
+                if message.startswith("/") :
+                    if message.startswith("/msg"):
+                        msg(message, client)
 
-                if message.startswith("/msg"):
-                    msg(message, client)
+                    elif message.startswith("/users"):
+                        client.send(online_users())
 
-                elif message.startswith("/users"):
-                    client.send(online_users())
+                    elif message.startswith("/help"):
+                        client.send(help())
+                    
+                    elif message.startswith("/exit") :
+                        if leave(client) :
+                            client.disconnect()
 
-                elif message.startswith("/help"):
-                    client.send(help())
-                
-                elif message.startswith("/exit") :
-                    if leave(client) :
-                        client.disconnect()
+                    elif message == "/friends" :
+                        get_friends(client)
 
-                elif message == "/friends" :
-                    get_friends(client)
+                    elif message.startswith("/friend_requests") :
+                        amities_inbox(client, message)
 
-                elif message.startswith("/friend_requests") :
-                    amities_inbox(client, message)
-
-                elif message.startswith("/befriend") :
-                    if len(message.split(" ")) > 1 :
-                        requete_amis(client, " ".join(message.split(" ")[1:]))
+                    elif message.startswith("/befriend") :
+                        if len(message.split(" ")) > 1 :
+                            requete_amis(client, " ".join(message.split(" ")[1:]))
+                        else :
+                            client.send("> La commande que vous avez entré est invalide")
+                    elif message.startswith("/who_is_blocked") :
+                        who_is_blocked(client)
+                    elif message.startswith("/block") :
+                        block(client, message)
                     else :
                         client.send("> La commande que vous avez entré est invalide")
-                elif message.startswith("/who_is_blocked") :
-                    who_is_blocked(client)
-                elif message.startswith("/") :
-                    client.send("> La commande que vous avez entré est invalide")
 
                 else:
                     broadcast(message, client)
@@ -629,8 +678,8 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    # HOST = '192.168.1.83'
-    HOST = '127.0.0.1' # Pour les tests sur machine locale
+    HOST = '192.168.1.83'
+    # HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
 
     # Créer un socket

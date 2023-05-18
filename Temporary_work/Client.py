@@ -131,10 +131,10 @@ def connect():
         # port = int(input("Port du serveur : "))
 
         host="91.173.148.254"
-        host="127.0.0.1"
+        #host="127.0.0.1"
 
         port = 24444
-        port = 4444
+        #port = 4444
 
         print("\n> connexion au serveur", end="")
         try:
