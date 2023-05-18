@@ -292,22 +292,44 @@ def amities(client) :
         res[i] = res[i][0]
     return res
 
-
+def requested_by(client) :
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    cur.execute(f"SELECT user FROM Req_Amis JOIN entite ON Req_Amis.sender = entite.ID WHERE receiver = {client.db_id};")
+    liste = []
+    for i in cur.fetchall() :
+        liste.append(i[0])
+    db.close()
+    return liste
 
 def requete_amis(client,receiver) :
     amis = amities(client)
-    temp_db = sqlite3.connect(path_db)
-    temp_cur = temp_db.cursor()
-    temp_cur.execute(f"SELECT user FROM Req_Amis JOIN entite ON Req_Amis.receiver = entite.id WHERE sender = {client.id()};")
-    amis_en_attente = temp_cur.fetchall()
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    cur.execute(f"SELECT user FROM Req_Amis JOIN entite ON Req_Amis.receiver = entite.id WHERE sender = {client.id()};")
+    amis_en_attente = cur.fetchall()
     print(amis_en_attente)
     for demande in amis_en_attente :
          if receiver == demande[0] :
             client.send(f"> Vous avez déjà demandé {receiver} en ami(e).")
-            temp_db.close()
+            db.close()
             return None
+    for i in requested_by(client) :
+        if i == receiver :
+            client.send(f"> L'utilisateur {receiver} vous déjà demandé en ami, voulez vous accepter ?")
+            if not client.ouinon() :
+                db.close()
+                client.send("> Retour aux messages !")
+                return None
+            else :
+                cur.execute(f"INSERT INTO Amities (user1,user2) VALUES ({get_user_db_id(receiver)},{client.db_id});")
+                cur.execute(f"DELETE FROM Req_Amis WHERE sender = {get_user_db_id(receiver)} AND receiver = {client.db_id};")
+                db.commit()
+                db.close()
+                client.send(f"Vous êtes maintenant ami avec {receiver} !")
+                return None
     if amis != [] :
-        if receiver in amities(client)[0] :
+        if receiver in amities(client) :
             client.send(f"> Vous êtes déjà ami avec {receiver}")
     elif load_user_name(receiver) != False :
         if receiver in blocked_list(client) :
@@ -315,15 +337,15 @@ def requete_amis(client,receiver) :
         elif receiver in blockers_list(client) :
             client.send(f"> L'utilisateur {receiver} n'existe pas.")
         else :
-            temp_cur.execute(f"select id from entite where user = '{receiver}';")
-            receiver_database_id = str(temp_cur.fetchall()[0][0])
+            cur.execute(f"select id from entite where user = '{receiver}';")
+            receiver_database_id = cur.fetchall()[0][0]
             print(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
-            temp_cur.execute(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
+            cur.execute(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
             client.send(f"> Votre demande d'ami envers {receiver} a été envoyée !")
     else :
         client.send(f"> Le nom d'utilisateur {receiver} n'existe pas.")
-    temp_db.commit()
-    temp_db.close()
+    db.commit()
+    db.close()
 
 
 
