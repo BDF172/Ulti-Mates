@@ -105,10 +105,10 @@ def get_client_obj(username) :
         False, le client recherché est hors ligne
 
     """
-    for client in clients :
-        if client.username == username :
-            return client
-    return False
+    try :
+        return clients[username]
+    except :
+        return False
 
 
 
@@ -310,11 +310,16 @@ def requete_amis(client,receiver) :
         if receiver in amities(client)[0] :
             client.send(f"> Vous êtes déjà ami avec {receiver}")
     elif load_user_name(receiver) != False :
-        temp_cur.execute(f"select id from entite where user = '{receiver}';")
-        receiver_database_id = str(temp_cur.fetchall()[0][0])
-        print(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
-        temp_cur.execute(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
-        client.send(f"> Votre demande d'ami envers {receiver} a été envoyée !")
+        if receiver in blocked_list(client) :
+            client.send(f"> Vous avez bloqué {receiver}.")
+        elif receiver in blockers_list(client) :
+            client.send(f"> L'utilisateur {receiver} n'existe pas.")
+        else :
+            temp_cur.execute(f"select id from entite where user = '{receiver}';")
+            receiver_database_id = str(temp_cur.fetchall()[0][0])
+            print(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
+            temp_cur.execute(f"insert into Req_Amis (sender,receiver) values ({client.id()},{receiver_database_id});")
+            client.send(f"> Votre demande d'ami envers {receiver} a été envoyée !")
     else :
         client.send(f"> Le nom d'utilisateur {receiver} n'existe pas.")
     temp_db.commit()
@@ -381,22 +386,21 @@ def amities_inbox(client,message) :
         client.send("> Voulez-vous accepter une demande (oui/non) ?")
         answer = client.receive()
         if answer == "oui" :
-            client.send("> Quelle est l'identifiant de la demande à accepter ?")
-            id = client.receive()
-            temp_db = sqlite3.connect(path_db)
-            temp_cur = temp_db.cursor()
-            temp_cur.execute(f"select count(req_id) from Req_Amis where req_id = {id} and receiver = {client.id()};")
-            requete = temp_cur.fetchall()[0][0]
-            if requete==1 :
-                print(f"insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = {id}; delete from Req_Amis where req_id = {id};")
-                temp_cur.execute(f"insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = {id};")
-                temp_cur.execute(f"delete from Req_Amis where req_id = {id};")
-                temp_db.commit()
-                temp_db.close()
+            client.send("> Quel utilisateur voulez-vous accepter ?")
+            username = client.receive()
+            db = sqlite3.connect(path_db)
+            cur = db.cursor()
+            cur.execute(f"select req_id from Req_Amis join entite on req_amis.sender=entite.id where receiver = {client.id()} and user='{username}';")
+            requete = cur.fetchall()
+            if requete != [] :
+                cur.execute(f"insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = {requete[0][0]};")
+                cur.execute(f"delete from Req_Amis where req_id = {requete[0][0]};")
+                db.commit()
+                db.close()
                 client.send("> Demande acceptée !")
             else :
                 client.send("> Aucune demande trouvée pour cet identifiant.\n")
-                temp_db.close()
+                db.close()
         elif answer == "non" :
             client.send("> D'accord, retour aux messages !\n")
             return None
@@ -404,23 +408,38 @@ def amities_inbox(client,message) :
             client.send("> Je n'ai pas compris votre réponse.\n> Retour aux messages !\n")
             return None
 
-
-
-def who_is_blocked(client, comeback:bool=False) :
+def blocked_list(client) :
     db = sqlite3.connect(path_db)
     cur = db.cursor()
     cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = {client.id()};")
     result = cur.fetchall()
-    if not comeback :
-        if result == []: 
-            client.send("> Vous n'avez bloqué personne.")
-            return None
-        else :
-            client.send("> Vous avez bloqué les personnes suivantes : \n")
-            liste_amis = []
-            for i in result :
-                liste_amis.append(i[0])
-            client.send(",".join(liste_amis))
+    liste_amis=[]
+    for i in result :
+        liste_amis.append(i[0])
+    db.close()
+    return liste_amis
+
+def blockers_list(client) :
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocked = {client.id()};")
+    result = cur.fetchall()
+    liste_blockers=[]
+    for i in result :
+        liste_blockers.append(i[0])
+    db.close()
+    return liste_blockers
+
+def who_is_blocked(client, comeback:bool=False) :
+    db = sqlite3.connect(path_db)
+    cur = db.cursor()
+    liste_amis = blocked_list(client)
+    if liste_amis == [] :
+        client.send("Vous n'avez bloqué personne.")
+        return None
+    else :
+        client.send(f"Vous avez bloqué les personne suivantes : \n")
+        client.send(", ".join(liste_amis))
     client.send("\n> Voulez-vous débloquer quelqu'un (oui/non) ?")
     answer = client.receive()
     if answer == "oui" :
@@ -461,6 +480,8 @@ def block(client, message) :
     db = sqlite3.connect(path_db)
     cur = db.cursor()
     cur.execute(f"INSERT INTO Blocked (blocker,blocked) values ({client.db_id},{blocked_db_id});")
+    cur.execute(f"DELETE FROM Amities WHERE (user1={client.db_id} AND user2={blocked_db_id}) OR (user2={client.db_id} AND user1={blocked_db_id});")
+    cur.execute(f"DELETE FROM Req_Amis WHERE (sender={client.db_id} AND receiver={blocked_db_id}) OR (receiver={client.db_id} AND sender={blocked_db_id});")
     db.commit()
     db.close()
     client.send(f"Vous avez bien bloqué {blocked}")
@@ -470,23 +491,21 @@ def msg(message, client):
     """s
     Envoie un message a un client specifique
     """
-    message = message + " "
-    message = message.replace("/msg","").split(" ")
-    receiver_username = message[1]
-    try:
-        receiver = clients[receiver_username]
-    except KeyError:
-        receiver = None
-
-    message = " ".join(message[2:])
-
-    if type(receiver) == type(client):
-        client.send(f"<me -> {str(receiver.username)}> {message}")
-        receiver.send(f"<{str(client.username)} -> me> {message}")   
+    if len(message.split(" ")) < 3 :
+        client.send("Vous devez entrer un message ainsi qu'un nom d'utilisateur à qui l'envoyer.")
+        return None
+    message = message.split(" ")[1:]
+    receiver_username = message[0]
+    message = " ".join(message[1:])
+    receiver = get_client_obj(receiver_username)
+    if receiver != False :
+        if receiver.username in amities(client) :
+            client.send(f"<me -> {str(receiver.username)}> {message}")
+            receiver.send(f"<{str(client.username)} -> me> {message}")
+        else :
+            client.send(f"Vous n'êtes pas ami avec {receiver_username}.")
     else:
-        client.send(f"> {receiver_username} does not exist or is not connected.\n")
-
-
+        client.send(f"> {receiver_username} n'existe pas ou n'est pas connecté\n")
 
 def help():
 
@@ -526,8 +545,6 @@ def leave(client) :
             return False
     except :
         return False
-
-
 
 def online_users() :
     """
