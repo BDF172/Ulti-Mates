@@ -510,12 +510,13 @@ def block(client:Client, message:str) :
 
 
 def msg(client:Client, message:str):
-    """s
+    """
     Envoie un message a un client specifique
     """
     if len(message.split(" ")) < 3 :
         client.send("Vous devez entrer un message ainsi qu'un nom d'utilisateur à qui l'envoyer.")
         return None
+    
     message = message.split(" ")[1:]
     receiver_username = message[0]
     message = " ".join(message[1:])
@@ -530,9 +531,8 @@ def msg(client:Client, message:str):
         client.send(f"> {receiver_username} n'existe pas ou n'est pas connecté\n")
 
 def help():
-
     """
-    ascii art of 'help' HELP
+    affiche un message d'aide
     """
     help_ ="\n  _________________________________________________________________  \n"
     help_ += " /                               _     _                           \ \n"
