@@ -526,7 +526,7 @@ def msg(client:Client, message:str):
             client.send(f"<me -> {str(receiver.username)}> {message}")
             receiver.send(f"<{str(client.username)} -> me> {message}")
         else :
-            client.send(f"Vous n'êtes pas ami avec {receiver_username}.")
+            client.send(f"> Vous n'êtes pas ami avec {receiver_username}.\n")
     else:
         client.send(f"> {receiver_username} n'existe pas ou n'est pas connecté\n")
 
