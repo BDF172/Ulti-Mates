@@ -110,12 +110,15 @@ def receive_message(sock:socket.socket):
 
 def disconnect(socket:socket.socket):
     print("> type '/reconnect' to attemps to reconnect, or '/exit' to quite")
-    reco = str(input('> '))
-    if reco == "/reconnect":
-        socket.close()
-        connect()
-    elif reco == '/exit': exit()
-    else: print("> commande inconnu")
+    reco = ''
+    while reco != '/reconnect' and reco != '/exit':
+        reco = str(input('> '))
+        
+        if reco == "/reconnect":
+            socket.close()
+            connect()
+        elif reco == '/exit': exit()
+        else: print("> commande inconnu")
 
 
 
@@ -131,8 +134,8 @@ def connect():
 
         default_port = 24444
 
-        host = input(f"Adresse IP du serveur (par defaut {default_host}) : ") 
-        port = input(f"Port du serveur (par defaut {default_port}) : ")
+        host = input(f"\n> Adresse IP du serveur (par defaut {default_host}) : ") 
+        port = input(f"> Port du serveur (par defaut {default_port}) : ")
 
         host = host if host != "" else default_host
         port = int(port) if port != "" else default_port
