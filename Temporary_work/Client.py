@@ -128,10 +128,8 @@ def connect():
     if not connected:
 
         default_host="91.173.148.254"
-        #host="127.0.0.1"
 
         default_port = 24444
-        #port = 4444
 
         host = input(f"Adresse IP du serveur (par defaut {default_host}) : ") 
         port = input(f"Port du serveur (par defaut {default_port}) : ")
