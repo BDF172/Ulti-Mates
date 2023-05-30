@@ -539,7 +539,7 @@ def help():
     help_ += " |                          |_| |_ |  |_)                          | \n"
     help_ += " |                          | | |_ |_ |                            | \n"
     help_ += " +-----------------------------------------------------------------+ \n"
-    help_ += " |- /msg <username> <message> : envoyer un message privé           | \n"
+    help_ += " |- /msg <username> <message> : envoyer un message privé à un ami  | \n"
     help_ += " |- /users                    : afficher les utilisateurs connecté | \n"
     help_ += " |- /friends                  : afficher la liste de vos amis      | \n"
     help_ += " |- /friend_requests          : afficher les demandes d'amis       | \n"
