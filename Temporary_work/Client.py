@@ -127,14 +127,17 @@ def connect():
 
     if not connected:
 
-        # host = str(input("Adresse IP du serveur : "))
-        # port = int(input("Port du serveur : "))
-
-        host="91.173.148.254"
+        default_host="91.173.148.254"
         #host="127.0.0.1"
 
-        port = 24444
+        default_port = 24444
         #port = 4444
+
+        host = input(f"Adresse IP du serveur (par defaut {default_host}) : ") 
+        port = input(f"Port du serveur (par defaut {default_port}) : ")
+
+        host = host if host != "" else default_host
+        port = int(port) if port != "" else default_port
 
         print("\n> connexion au serveur", end="")
         try:
