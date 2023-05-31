@@ -1,4 +1,4 @@
-import socket, threading, time
+import socket, threading, sys
 import end_to_end_encryption as e2ee
 import traceback
 
@@ -62,10 +62,12 @@ def send_message(sock:socket.socket):
     while True :
         message = str(input())
         if message != '':
+            # deepcode ignore NoHardcodedCredentials: <please specify a reason of ignoring this>
             if message == "/exit":
                 sock.close()
-                exit()
+                sys.exit()
 
+            # deepcode ignore NoHardcodedCredentials: <please specify a reason of ignoring this>
             if message == "/reconnect":
                 sock.close()
                 connect()
@@ -117,7 +119,7 @@ def disconnect(socket:socket.socket):
         if reco == "/reconnect":
             socket.close()
             connect()
-        elif reco == '/exit': exit()
+        elif reco == '/exit': sys.exit()
         else: print("> commande inconnu")
 
 

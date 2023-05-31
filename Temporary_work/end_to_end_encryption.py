@@ -1,6 +1,7 @@
 import random, string, traceback
 
-fix_token = 'uCTXeITdeSfD421rlVnn9fhPA1a8cvapQ6caY4v6IbsN8f3RAw0peeSjyhV2TfLnvzCD4T7HMQXFnAJN3CRahV1RZmahCEKLgsKAICffjvEYBD9ZAUck9dwwpFpz2k5V'
+with open("Temporary_work\\.security", "r") as f:
+    fix_token = f.read()
 
 def generate_token() -> str:
     """Generate a random token."""
