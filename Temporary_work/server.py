@@ -1,5 +1,6 @@
 import socket, threading, sqlite3, time, hashlib, traceback
 import trace
+from unittest import result
 import end_to_end_encryption as e2ee
 
 class Client :
@@ -35,11 +36,12 @@ class Client :
     def registered(self) :
         temp_db = sqlite3.connect(path_db)
         temp_cur = temp_db.cursor()
-        temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user = %s ", (self.username))
+        temp_cur.execute("SELECT COUNT(*) FROM entite WHERE user = ? ;", (self.username,))
         if temp_cur.fetchall()[0][0]==1 :
-            temp_cur.execute(f"SELECT id FROM entite WHERE user = %s ;", (self.username))
+            temp_cur.execute("SELECT id FROM entite WHERE user = ? ;", (self.username,))
+            result = temp_cur.fetchall()[0][0]
             temp_db.close()
-            return temp_cur.fetchall()[0][0]
+            return result
         
         temp_db.close()
         return False
@@ -57,7 +59,7 @@ class Client :
 
 clients = {}
 path_db='/home/freebox/server/users.db'
-# path_db = 'Temporary_work\\users.db'
+path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -78,7 +80,7 @@ def load_user_name(username:str):
     temp_db = sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
     print("👉 |checking user name")
-    temp_cur.execute(f"SELECT COUNT(user) FROM entite WHERE user= %s ;", (username))
+    temp_cur.execute("SELECT COUNT(user) FROM entite WHERE user= ? ;", (username,))
     res = temp_cur.fetchall()[0][0] == 1
     temp_db.close()
     return res
@@ -179,7 +181,7 @@ def first_connection(client:Client,attempts=0) :
 
             client.send("> Quel est votre mot de passe ?")
             
-            temp_cur.execute(f"SELECT COUNT(*) FROM entite WHERE user= %s AND password= %s ;", (client.username, hashlib.sha256(client.receive().encode()).hexdigest()))
+            temp_cur.execute("SELECT COUNT(*) FROM entite WHERE user= ? AND password= ? ;", (client.username, hashlib.sha256(client.receive().encode()).hexdigest()) )
             if temp_cur.fetchall()[0][0]==1 :
 
                 print(f"👉 | {client.username} is connected")
@@ -263,7 +265,7 @@ def create_user(client:Client) :
                     try :
                         temp_db=sqlite3.connect(path_db)
                         temp_cur=temp_db.cursor()
-                        temp_cur.execute(f"INSERT INTO entite (user,password) VALUES ( %s , %s );", (client.username, psw))
+                        temp_cur.execute("INSERT INTO entite (user,password) VALUES ( ? , ? );", (client.username, psw))
                         temp_db.commit()
                         print(f"✅ | L'utilisateur {client.username} vient d'être ajouté à la base de données.")
                         temp_db.close()
@@ -288,7 +290,7 @@ def create_user(client:Client) :
 def amities(client:Client) :
     temp_db=sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
-    temp_cur.execute(f'select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = %s ) UNION select user1 as user from Amities where user2 in (select id from entite where user = %s ));', (client.username, client.username))
+    temp_cur.execute('select user from entite where id in (select user2 as user from Amities where user1 in (select id from entite where user = ? ) UNION select user1 as user from Amities where user2 in (select id from entite where user = ? ));', (client.username, client.username) )
     res = temp_cur.fetchall()
     temp_db.close()
     for i in range(len(res)) :
@@ -298,7 +300,7 @@ def amities(client:Client) :
 def requested_by(client:Client) :
     db = sqlite3.connect(path_db)
     cur = db.cursor()
-    cur.execute(f"SELECT user FROM Req_Amis JOIN entite ON Req_Amis.sender = entite.ID WHERE receiver = %s ;", (client.db_id))
+    cur.execute("SELECT user FROM Req_Amis JOIN entite ON Req_Amis.sender = entite.ID WHERE receiver = ? ;", (client.db_id,))
     liste = []
     for i in cur.fetchall() :
         liste.append(i[0])
@@ -309,7 +311,7 @@ def requete_amis(client:Client,receiver:str) :
     amis = amities(client)
     db = sqlite3.connect(path_db)
     cur = db.cursor()
-    cur.execute(f"SELECT user FROM Req_Amis JOIN entite ON Req_Amis.receiver = entite.id WHERE sender = %s ;", (client.db_id))
+    cur.execute("SELECT user FROM Req_Amis JOIN entite ON Req_Amis.receiver = entite.id WHERE sender = ? ;", (client.db_id,))
     amis_en_attente = cur.fetchall()
     print(amis_en_attente)
     for demande in amis_en_attente :
@@ -325,8 +327,8 @@ def requete_amis(client:Client,receiver:str) :
                 client.send("> Retour aux messages !")
                 return None
             else :
-                cur.execute(f"INSERT INTO Amities (user1,user2) VALUES ( %s , %s );", (get_user_db_id(receiver),client.db_id))
-                cur.execute(f"DELETE FROM Req_Amis WHERE sender = %s AND receiver = %s ;", (get_user_db_id(receiver),client.db_id))
+                cur.execute("INSERT INTO Amities (user1,user2) VALUES ( ? , ? );", (get_user_db_id(receiver),client.db_id) )
+                cur.execute("DELETE FROM Req_Amis WHERE sender = ? AND receiver = ? ;", (get_user_db_id(receiver),client.db_id) )
                 db.commit()
                 db.close()
                 client.send(f"Vous êtes maintenant ami avec {receiver} !")
@@ -340,10 +342,10 @@ def requete_amis(client:Client,receiver:str) :
         elif receiver in blockers_list(client) :
             client.send(f"> L'utilisateur {receiver} n'existe pas.")
         else :
-            cur.execute(f"select id from entite where user = %s ;", (receiver))
+            cur.execute("select id from entite where user = ? ;", (receiver,))
             receiver_database_id = cur.fetchall()[0][0]
-            print(f"insert into Req_Amis (sender,receiver) values ( %s , %s );", (client.id(), receiver_database_id))
-            cur.execute(f"insert into Req_Amis (sender,receiver) values ( %s , %s );", (client.id(), receiver_database_id))
+            print(f"insert into Req_Amis (sender,receiver) values ( ? , ? );", (client.id(), receiver_database_id))
+            cur.execute("insert into Req_Amis (sender,receiver) values ( ? , ? );", (client.id(), receiver_database_id))
             client.send(f"> Votre demande d'ami envers {receiver} a été envoyée !")
     else :
         client.send(f"> Le nom d'utilisateur {receiver} n'existe pas.")
@@ -355,7 +357,7 @@ def requete_amis(client:Client,receiver:str) :
 def demande_amis(client:Client,message:str) :
     temp_db = sqlite3.connect(path_db)
     temp_cur = temp_db.cursor()
-    temp_cur.execute(f"select req_id,user from Req_Amis join entite on Req_Amis.sender = entite.id where receiver = %s ;", (client.id()))
+    temp_cur.execute("select req_id,user from Req_Amis join entite on Req_Amis.sender = entite.id where receiver = ? ;", (client.id(),))
     ans = temp_cur.fetchall()
     temp_db.close()
 
@@ -384,7 +386,7 @@ def demande_amis(client:Client,message:str) :
 def get_user_db_id(username:str) :
     db = sqlite3.connect(path_db)
     cur = db.cursor()
-    cur.execute(f"SELECT * FROM entite WHERE user = %s ;", (username))
+    cur.execute("SELECT * FROM entite WHERE user = ? ;", (username,))
     result = cur.fetchall()
     db.close()
     if len(result) == 1 :
@@ -415,11 +417,11 @@ def amities_inbox(client:Client,message:str) :
             username = client.receive()
             db = sqlite3.connect(path_db)
             cur = db.cursor()
-            cur.execute(f"select req_id from Req_Amis join entite on req_amis.sender=entite.id where receiver = %s and user = %s ;", (client.id(), username))
+            cur.execute("select req_id from Req_Amis join entite on req_amis.sender=entite.id where receiver = ? and user = ? ;", (client.id(), username))
             requete = cur.fetchall()
             if requete != [] :
-                cur.execute(f"insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = %s ;", (requete[0][0]))
-                cur.execute(f"delete from Req_Amis where req_id = %s ;", (requete[0][0]))
+                cur.execute("insert into Amities (user1,user2) select sender,receiver from Req_Amis where req_id = ? ;", (requete[0][0],))
+                cur.execute("delete from Req_Amis where req_id = ? ;", (requete[0][0],))
                 db.commit()
                 db.close()
                 client.send("> Demande acceptée !")
@@ -436,7 +438,7 @@ def amities_inbox(client:Client,message:str) :
 def blocked_list(client:Client) :
     db = sqlite3.connect(path_db)
     cur = db.cursor()
-    cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = %s ;", (client.id()))
+    cur.execute("select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocker = ? ;", (client.id(),))
     result = cur.fetchall()
     liste_amis=[]
     for i in result :
@@ -447,7 +449,7 @@ def blocked_list(client:Client) :
 def blockers_list(client:Client) :
     db = sqlite3.connect(path_db)
     cur = db.cursor()
-    cur.execute(f"select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocked = %s ;", (client.id()))
+    cur.execute("select user from Blocked JOIN entite on Blocked.blocked = entite.id where blocked = ? ;", (client.id(),))
     result = cur.fetchall()
     liste_blockers=[]
     for i in result :
@@ -473,12 +475,12 @@ def who_is_blocked(client:Client, comeback:bool=False) :
         if not load_user_name(username_to_unblock) :
             client.send("Le nom d'utilisateur entré n'existe pas.")
         else :
-            cur.execute(f"SELECT block_id FROM Blocked JOIN entite ON Blocked.blocked = entite.ID WHERE Blocker= %s AND user= %s ;", (client.db_id,username_to_unblock))
+            cur.execute("SELECT block_id FROM Blocked JOIN entite ON Blocked.blocked = entite.ID WHERE Blocker= ? AND user= ? ;", (client.db_id,username_to_unblock))
             result = cur.fetchall()
             if result != [] :
                 client.send(f"Voulez-vous vraiment débloquer {username_to_unblock} ?")
                 if client.ouinon() :
-                    cur.execute(f"DELETE FROM Blocked WHERE block_id = %s ", (result[0][0]))
+                    cur.execute("DELETE FROM Blocked WHERE block_id = ? ", (result[0][0],))
                     db.commit()
             else :
                 client.send(f"Vous n'avez pas bloqué {username_to_unblock}")
@@ -504,9 +506,9 @@ def block(client:Client, message:str) :
 
     db = sqlite3.connect(path_db)
     cur = db.cursor()
-    cur.execute(f"INSERT INTO Blocked (blocker,blocked) values ( %s , %s );", (client.db_id,blocked_db_id))
-    cur.execute(f"DELETE FROM Amities WHERE (user1= %s AND user2= %s ) OR (user2= %s AND user1= %s );", (client.db_id,blocked_db_id,client.db_id,blocked_db_id))
-    cur.execute(f"DELETE FROM Req_Amis WHERE (sender= %s AND receiver= %s ) OR (receiver= %s AND sender= %s );", (client.db_id,blocked_db_id,client.db_id,blocked_db_id))
+    cur.execute("INSERT INTO Blocked (blocker,blocked) values ( ? , ? );", (client.db_id, blocked_db_id))
+    cur.execute("DELETE FROM Amities WHERE (user1= ? AND user2= ? ) OR (user2= ? AND user1= ? );", (client.db_id, blocked_db_id, client.db_id, blocked_db_id))
+    cur.execute("DELETE FROM Req_Amis WHERE (sender= ? AND receiver= ? ) OR (receiver= ? AND sender= ? );", (client.db_id, blocked_db_id, client.db_id, blocked_db_id))
     db.commit()
     db.close()
     client.send(f"Vous avez bien bloqué {blocked}")
@@ -720,8 +722,8 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    HOST = '192.168.1.83'
-    # HOST = '127.0.0.1' # Pour les tests sur machine locale
+    # HOST = '192.168.1.83'
+    HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
 
     # Créer un socket
