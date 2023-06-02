@@ -1,6 +1,6 @@
 import random, string, traceback
 
-with open("Temporary_work\\.security", "r") as f:
+with open("client\.security", "r") as f:
     fix_token = f.read()
 
 def generate_token() -> str:

@@ -11,6 +11,23 @@ handshake_done = False
 global username
 username = ""
 
+global client_version
+client_version = "unknown"
+
+global server_version
+server_version = "unknown"
+
+global outdated
+outdated = False
+
+
+try:
+    with open("client/client.info", "r") as file:     
+        client_version = file.read()
+except:
+    print("> impossible de trouver la version du client !")
+    client_version = "unknown"
+
 
 def handshake(socket:socket.socket):
     """
@@ -18,13 +35,15 @@ def handshake(socket:socket.socket):
     """
     
     global client_key
+    global outdated
+    global client_version
+    global server_version
 
     print("\n> handshake en cours", end="")
     encryption_key = e2ee.generate_token()
   
     client_key = encryption_key
     encrypted_key = e2ee.encrypt_message(encryption_key, e2ee.fix_token)
-
 
     try :
         print(".", end="", flush=True)
@@ -34,13 +53,23 @@ def handshake(socket:socket.socket):
         print(traceback.format_exc())
         return False
 
-    print(".", end="", flush=True)
-
     try :
         response = socket.recv(1024)
         print(".", end="", flush=True)
         if e2ee.decrypt_message(response, e2ee.fix_token) == client_key:
+            try:
+                response = socket.recv(1024)
+                print(".", end="", flush=True)
+                server_version = e2ee.decrypt_message(response, client_key)
+                if server_version == client_version:
+                    outdated = False
+                else:
+                    outdated = True
+            except:
+                print("\n/!\ Impossible de recevoir la version du serveur ! /!\ \n")
+
             return True
+                
         else:
             print("\n/!\ handshake échoué ! /!\ \n")
             return False
@@ -81,6 +110,13 @@ def send_message(sock:socket.socket):
             if len(message) >= 1024:
                 print("\n> Message trop long !")
                 continue
+
+            # deepcode ignore NoHardcodedCredentials: <not credentials>
+            if message == "/info":
+                if client_version != "unknown":
+                    print(f"> pour avoir une meilleur expérience, assurez-vous d'avoir la meme version que du server.\n> Version du client : {client_version}")
+                else:
+                    print("> impossible de trouver la version du client !")
             
             try :
                 sock.send(e2ee.encrypt_message(message, client_key))
@@ -127,6 +163,7 @@ def disconnect(socket:socket.socket):
 def connect():
 
     global handshake_done
+    global client_key
 
     connected = False
 
@@ -173,6 +210,10 @@ def connect():
 
             if handshake_done :
                 print("\n> cryptage de la connexion établie !\nVous pouvez commencer à envoyer des messages en toute sécurité !\n--Début de l'authentification--\n")
+                if outdated:
+                    print(f"❗ Votre version du client ({client_version}) est différente de celle du serveur ({server_version}) ❗ \n> pour avoir une meilleur expérience, assurez-vous d'etre a jour.\n")
+                else:
+                    print(f"> Votre version du client est a jour !")
                 connected = True
 
             send_thread.start()

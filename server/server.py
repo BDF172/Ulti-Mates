@@ -63,8 +63,19 @@ class Client :
             return self.ouinon()
 
 clients = {}
-path_db='/home/freebox/server/users.db'
-# path_db = 'Temporary_work\\users.db'
+path_db='\\home\\freebox\\server\\users.db'
+local_path_db = 'server\\users.db'
+
+path_db = local_path_db
+
+
+
+try:
+    with open("server/server.info", "r") as info:
+        server_version = info.read()
+except:
+    print("❌ | Impossible de trouver la version du server !")
+    server_version = "unknown"
 
 """
 ---------TO DO---------
@@ -73,7 +84,7 @@ path_db='/home/freebox/server/users.db'
 
 """
 
-commandes = ["/msg", "/users", "/help"]
+
 users_ip = {}
 
 def load_user_name(username:str):
@@ -544,20 +555,18 @@ def help():
     """
     affiche un message d'aide
     """
-    help_ ="\n  _________________________________________________________________  \n"
-    help_ += " /                               _     _                           \ \n"
-    help_ += " |                          |_| |_ |  |_)                          | \n"
-    help_ += " |                          | | |_ |_ |                            | \n"
-    help_ += " +-----------------------------------------------------------------+ \n"
-    help_ += " |- /msg <username> <message> : envoyer un message privé à un ami  | \n"
-    help_ += " |- /users                    : afficher les utilisateurs connecté | \n"
-    help_ += " |- /friends                  : afficher la liste de vos amis      | \n"
-    help_ += " |- /friend_requests          : afficher les demandes d'amis       | \n"
-    help_ += " |- /befriend <username>      : faire une demande d'ami            | \n"
-    help_ += " |- /who_is_blocked           : afficher les personnes bloquées    | \n"
-    help_ += " |- /help                     : afficher ce message                | \n"
-    help_ += " |- /exit                     : quitter le programme               | \n"
-    help_ += " \_________________________________________________________________/ \n"
+    help_ ="\n  ___________________________________________________________________  \n"
+    help_ += " /                                                                   \ \n"
+    help_ += " |- /befriend <username>      : faire une demande d'ami              | \n"
+    help_ += " |- /exit                     : quitter le programme                 | \n"
+    help_ += " |- /friends                  : afficher la liste de vos amis        | \n"
+    help_ += " |- /friend_requests          : afficher les demandes d'amis         | \n"
+    help_ += " |- /help                     : afficher ce message                  | \n"
+    help_ += " |- /info                     : afficher la version du client/server | \n"
+    help_ += " |- /msg <username> <message> : envoyer un message privé à un ami    | \n"
+    help_ += " |- /users                    : afficher les utilisateurs connecté   | \n"
+    help_ += " |- /who_is_blocked           : afficher les personnes bloquées      | \n"
+    help_ += " \___________________________________________________________________/ \n"
     # plus grand et ca bug :/
     return help_
 
@@ -603,6 +612,18 @@ def online_users() :
     
 
 
+def server_info(client:Client):
+    """
+    envoie un message au client a propos de la version du server
+    """
+    try:
+        with open("server/server.info", "r") as info:
+            client.send(f"> Version du server : {info.read()}")
+    except:
+        client.send("> Impossible de trouver la version du server !")
+
+
+
 def handshake(message:str):
     """
     when a client to the server, it frst sends a message containing the encryption key that need to be decrypted with the fix_token
@@ -618,12 +639,13 @@ def handle_client(conn:socket, addr:str, first_time=True, handshaked=False):
     Fonction pour gérer les connexions entrantes des clients
     """
               
-    print(f"\n------------------------------------\
-          \n🔓 | Handshake de {addr} en cours...")
+    print(f"\n------------------------------------\n🔓 | Handshake de {addr} en cours...")
     if not handshaked :
         handshaked, key = handshake(conn.recv(1024))
         if handshaked :
             conn.send(e2ee.encrypt_message(key, e2ee.fix_token))
+            time.sleep(0.1)
+            conn.send(e2ee.encrypt_message(server_version, key))
         else :
             print(f"❌ | Handshake de {addr} échoué")
             conn.close()
@@ -704,6 +726,8 @@ def handle_client(conn:socket, addr:str, first_time=True, handshaked=False):
                         who_is_blocked(client)
                     elif message.startswith("/block") :
                         block(client, message)
+                    elif message.startswith("/info") :
+                        server_info(client)
                     else :
                         client.send("> La commande que vous avez entré est invalide")
 
@@ -727,9 +751,23 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    HOST = '192.168.1.83'
-    # HOST = '127.0.0.1' # Pour les tests sur machine locale
+    # HOST = '192.168.1.83'
+    HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
+
+    #check si la base de données existe
+    print("👉 | Vérification de la base de données...")
+    try:
+        db = sqlite3.connect(path_db)
+        db.close()
+    except:
+        print("❌ | La base de données n'a pas été trouvée.")
+        print("❌ | Le serveur ne peut pas démarrer.")
+        return None
+
+    print("✅ | La base de données a été trouvée.")
+    print("✅ | Le serveur peut démarrer.")
+    
 
     # Créer un socket
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server :
