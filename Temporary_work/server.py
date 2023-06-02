@@ -64,7 +64,7 @@ class Client :
 
 clients = {}
 path_db='/home/freebox/server/users.db'
-path_db = 'Temporary_work\\users.db'
+# path_db = 'Temporary_work\\users.db'
 
 """
 ---------TO DO---------
@@ -727,8 +727,8 @@ def start_server():
     Fonction pour démarrer le serveur et écouter les connexions entrantes
     """
     # Configuration du serveur
-    # HOST = '192.168.1.83'
-    HOST = '127.0.0.1' # Pour les tests sur machine locale
+    HOST = '192.168.1.83'
+    # HOST = '127.0.0.1' # Pour les tests sur machine locale
     PORT = 4444
 
     # Créer un socket
