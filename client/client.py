@@ -61,8 +61,6 @@ def handshake(socket:socket.socket):
                 response = socket.recv(1024)
                 print(".", end="", flush=True)
                 server_version = e2ee.decrypt_message(response, client_key)
-                print("\ndebug1:", server_version[0:2])
-                print("\ndebug2:", server_version[2:])
                 if server_version[0:2] == "##":
                     server_version = server_version[2:]
                     if server_version == client_version:
@@ -157,6 +155,8 @@ def disconnect(socket:socket.socket):
         reco = str(input('> '))
         
         if reco == "/reconnect":
+            global username
+            username = ""
             socket.close()
             connect()
         elif reco == '/exit': sys.exit()
