@@ -467,6 +467,7 @@ def who_is_blocked(client:Client, comeback:bool=False) :
     liste_amis = blocked_list(client)
     if liste_amis == [] :
         client.send("Vous n'avez bloqué personne.")
+        db.close()
         return None
     else :
         client.send(f"Vous avez bloqué les personne suivantes : \n")
@@ -749,6 +750,7 @@ def start_server():
 
         # Afficher le nombre de threads actifs
         print(f"👉 | [ACTIF] {threading.activeCount() - 1} connexions actives.")
+
 
 
 
