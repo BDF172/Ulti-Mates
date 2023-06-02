@@ -732,24 +732,24 @@ def start_server():
     PORT = 4444
 
     # Créer un socket
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.bind((HOST, PORT))
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server :
+        server.bind((HOST, PORT))
 
-    # Ecouter les connexions entrantes
-    server.listen(1)
+        # Ecouter les connexions entrantes
+        server.listen(1)
 
-    print(f"👉 | [EN ECOUTE] Le serveur écoute sur {HOST}:{PORT}.")
+        print(f"👉 | [EN ECOUTE] Le serveur écoute sur {HOST}:{PORT}.")
 
-    while True:
-        # Accepter les connexions entrantes
-        conn, addr = server.accept()
+        while True:
+            # Accepter les connexions entrantes
+            conn, addr = server.accept()
 
-        # Créer un thread pour gérer la connexion entrante
-        thread = threading.Thread(target=handle_client, args=(conn, addr))
-        thread.start()
+            # Créer un thread pour gérer la connexion entrante
+            thread = threading.Thread(target=handle_client, args=(conn, addr))
+            thread.start()
 
-        # Afficher le nombre de threads actifs
-        print(f"👉 | [ACTIF] {threading.activeCount() - 1} connexions actives.")
+            # Afficher le nombre de threads actifs
+            print(f"👉 | [ACTIF] {threading.activeCount() - 1} connexions actives.")
 
 
 
