@@ -645,7 +645,7 @@ def handle_client(conn:socket, addr:str, first_time=True, handshaked=False):
         if handshaked :
             conn.send(e2ee.encrypt_message(key, e2ee.fix_token))
             time.sleep(0.1)
-            conn.send(e2ee.encrypt_message(server_version, key))
+            conn.send(e2ee.encrypt_message(f"##{server_version}", key))
         else :
             print(f"❌ | Handshake de {addr} échoué")
             conn.close()

@@ -18,7 +18,7 @@ global server_version
 server_version = "unknown"
 
 global outdated
-outdated = False
+outdated = "unknown"
 
 
 try:
@@ -61,10 +61,14 @@ def handshake(socket:socket.socket):
                 response = socket.recv(1024)
                 print(".", end="", flush=True)
                 server_version = e2ee.decrypt_message(response, client_key)
-                if server_version == client_version:
-                    outdated = False
-                else:
-                    outdated = True
+                print("\ndebug1:", server_version[0:2])
+                print("\ndebug2:", server_version[2:])
+                if server_version[0:2] == "##":
+                    server_version = server_version[2:]
+                    if server_version == client_version:
+                        outdated = False
+                    else:
+                        outdated = True
             except:
                 print("\n/!\ Impossible de recevoir la version du serveur ! /!\ \n")
 
@@ -210,10 +214,13 @@ def connect():
 
             if handshake_done :
                 print("\n> cryptage de la connexion établie !\nVous pouvez commencer à envoyer des messages en toute sécurité !\n--Début de l'authentification--\n")
-                if outdated:
-                    print(f"❗ Votre version du client ({client_version}) est différente de celle du serveur ({server_version}) ❗ \n> pour avoir une meilleur expérience, assurez-vous d'etre a jour.\n")
+                if type(outdated) == bool:
+                    if outdated:
+                        print(f"\n> /!\ Une nouvelle version du client est disponible ({server_version}) /!\ \n")
+                    else:
+                        print(f"> Votre client est a jour !")
                 else:
-                    print(f"> Votre version du client est a jour !")
+                    print(f"> Impossible de vérifier la version du server !")
                 connected = True
 
             send_thread.start()
