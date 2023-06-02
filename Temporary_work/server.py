@@ -1,7 +1,12 @@
-import socket, threading, sqlite3, time, hashlib, traceback
-import trace
-from unittest import result
+import hashlib
+import socket
+import sqlite3
+import threading
+import time
+import traceback
+
 import end_to_end_encryption as e2ee
+
 
 class Client :
     def __init__(self,conn:socket,adresse:str,key:str,user_name:str) :
@@ -12,7 +17,7 @@ class Client :
         self.connected = True
         self.db_id = self.registered()
 
-    def connection(self) :
+    def connection(self) -> socket:
         return self.conn
 
     def connection_status(self) :
@@ -143,7 +148,6 @@ def broadcast(message:str, client:Client):
                 clients[user].send((f"{client.username} {message}"))
             else:
                 clients[user].send((f"<{client.username}> {message}"))
-    return
 
 
 
@@ -203,7 +207,7 @@ def first_connection(client:Client,attempts=0) :
             if etapes_creation_compte == True : # La fonction nous renverra True si le compte est créé avec succès.
                 print(f"✅ | {client.username} created an account")
 
-                client.send("> Votre compte a été créé ! \nVous allez être déconnecté, veuillez vous reconnecter.")
+                client.send("> Votre compte a été créé ! \n\n> Vous allez être déconnecté, veuillez vous reconnecter. (/exit)")
                 client.disconnect()
                 return True
             elif etapes_creation_compte == "#USER_INPUT_MISTAKE#" :

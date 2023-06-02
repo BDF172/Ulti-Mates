@@ -62,12 +62,12 @@ def send_message(sock:socket.socket):
     while True :
         message = str(input())
         if message != '':
-            # deepcode ignore NoHardcodedCredentials: <please specify a reason of ignoring this>
+            # deepcode ignore NoHardcodedCredentials: <not credentials>
             if message == "/exit":
                 sock.close()
                 sys.exit()
 
-            # deepcode ignore NoHardcodedCredentials: <please specify a reason of ignoring this>
+            # deepcode ignore NoHardcodedCredentials: <not credentials>
             if message == "/reconnect":
                 sock.close()
                 connect()
