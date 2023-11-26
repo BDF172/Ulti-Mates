@@ -41,6 +41,7 @@ class Client :
     def registered(self) :
         temp_db = sqlite3.connect(path_db)
         temp_cur = temp_db.cursor()
+        # TODO : Patch SQL injection vuln
         temp_cur.execute("SELECT COUNT(*) FROM entite WHERE user = ? ;", (self.username,))
         if temp_cur.fetchall()[0][0]==1 :
             temp_cur.execute("SELECT id FROM entite WHERE user = ? ;", (self.username,))
@@ -96,6 +97,7 @@ def load_user_name(username:str):
     temp_db = sqlite3.connect(path_db)
     temp_cur=temp_db.cursor()
     print("👉 |checking user name")
+    # TODO : Patch SQL injection vuln
     temp_cur.execute("SELECT COUNT(user) FROM entite WHERE user= ? ;", (username,))
     res = temp_cur.fetchall()[0][0] == 1
     temp_db.close()
@@ -195,7 +197,8 @@ def first_connection(client:Client,attempts=0) :
             print(f"👉 | {client.username} is trying to connect")
 
             client.send("> Quel est votre mot de passe ?")
-            
+
+            # TODO : Patch SQL injection vuln
             temp_cur.execute("SELECT COUNT(*) FROM entite WHERE user= ? AND password= ? ;", (client.username, hashlib.sha256(client.receive().encode()).hexdigest()) )
             if temp_cur.fetchall()[0][0]==1 :
 
